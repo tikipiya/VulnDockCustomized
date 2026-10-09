@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -28,7 +27,7 @@ func (s *Server) handlePrompts(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, prompts)
 	case http.MethodPost:
 		var draft domain.SavedPromptDraft
-		if err := json.NewDecoder(r.Body).Decode(&draft); err != nil {
+		if err := decodeJSON(w, r, &draft); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -64,7 +63,7 @@ func (s *Server) handlePromptSubroutes(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		var draft domain.SavedPromptDraft
-		if err := json.NewDecoder(r.Body).Decode(&draft); err != nil {
+		if err := decodeJSON(w, r, &draft); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}

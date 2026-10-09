@@ -32,6 +32,7 @@ type Server struct {
 	SecureCookies      bool
 	loginLim           *loginLimiter
 	backupLim          *loginLimiter
+	authStatusLim      *loginLimiter
 }
 
 type loginLimiter struct {
@@ -44,8 +45,16 @@ type loginLimiter struct {
 func newLoginLimiter() *loginLimiter {
 	return &loginLimiter{
 		clients:  map[string]*rate.Limiter{},
-		interval: 2 * time.Second,
-		burst:    5,
+		interval: 3 * time.Second,
+		burst:    3,
+	}
+}
+
+func newAuthStatusLimiter() *loginLimiter {
+	return &loginLimiter{
+		clients:  map[string]*rate.Limiter{},
+		interval: 200 * time.Millisecond,
+		burst:    30,
 	}
 }
 
@@ -60,8 +69,11 @@ func newBackupLimiter() *loginLimiter {
 func (l *loginLimiter) allow(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if len(l.clients) > 2048 {
-		l.clients = map[string]*rate.Limiter{}
+	for len(l.clients) > 2048 {
+		for key := range l.clients {
+			delete(l.clients, key)
+			break
+		}
 	}
 	lim, ok := l.clients[ip]
 	if !ok {
@@ -84,6 +96,7 @@ func New(authSvc *auth.Service, reports *service.Reports, prompts *service.Promp
 		SecureCookies:      secureCookies,
 		loginLim:           newLoginLimiter(),
 		backupLim:          newBackupLimiter(),
+		authStatusLim:      newAuthStatusLimiter(),
 	}
 }
 
@@ -110,6 +123,7 @@ func withSecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -149,14 +163,26 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		dbBytes = info.Size()
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"dataDir": s.DataDir,
+		"dataDir": redactDataDir(s.DataDir),
 		"dbBytes": dbBytes,
 	})
+}
+
+func redactDataDir(path string) string {
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" && strings.HasPrefix(path, home) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
 }
 
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
+		return
+	}
+	if !s.authStatusLim.allow(clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, errors.New("too many requests"))
 		return
 	}
 	needs, err := s.Auth.NeedsSetup(r.Context())
@@ -202,7 +228,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		Password   string `json:"password"`
 		SetupToken string `json:"setupToken"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -240,7 +266,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -271,11 +297,16 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	ip := clientIP(r)
+	if !s.loginLim.allow(ip) {
+		writeError(w, http.StatusTooManyRequests, errors.New("too many password change attempts"))
+		return
+	}
 	var body struct {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -316,7 +347,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, reports)
 	case http.MethodPost:
 		var draft domain.ReportDraft
-		if err := json.NewDecoder(r.Body).Decode(&draft); err != nil {
+		if err := decodeJSON(w, r, &draft); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -343,7 +374,7 @@ func (s *Server) handleReportSubroutes(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:
 			var draft domain.ReportDraft
-			if err := json.NewDecoder(r.Body).Decode(&draft); err != nil {
+			if err := decodeJSON(w, r, &draft); err != nil {
 				writeError(w, http.StatusBadRequest, err)
 				return
 			}
@@ -383,17 +414,12 @@ func (s *Server) handleReportSubroutes(w http.ResponseWriter, r *http.Request) {
 			methodNotAllowed(w)
 			return
 		}
-		content, name, ctype, err := s.Reports.Store.PocContent(r.Context(), id, fileID)
+		content, name, _, err := s.Reports.Store.PocContent(r.Context(), id, fileID)
 		if err != nil {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		if ctype == "" {
-			ctype = "application/octet-stream"
-		}
-		w.Header().Set("Content-Type", ctype)
-		w.Header().Set("Content-Disposition", "attachment; filename=\""+name+"\"")
-		_, _ = w.Write(content)
+		writeAttachmentResponse(w, name, content)
 		return
 	}
 	http.NotFound(w, r)
