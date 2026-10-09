@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	SettingPasswordHash = "password_hash"
-	SettingSetupDone    = "setup_completed_at"
-	SessionCookieName   = "vdc_session"
-	SessionDuration       = 72 * time.Hour
-	sessionRefreshWindow  = 24 * time.Hour
+	SettingPasswordHash  = "password_hash"
+	SettingSetupDone     = "setup_completed_at"
+	SessionCookieName    = "vdc_session"
+	SessionDuration      = 72 * time.Hour
+	sessionRefreshWindow = 24 * time.Hour
 )
 
 type Service struct {
