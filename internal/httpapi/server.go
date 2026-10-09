@@ -18,7 +18,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const version = "1.1.0"
+const version = "1.2.0"
 
 type Server struct {
 	Auth               *auth.Service

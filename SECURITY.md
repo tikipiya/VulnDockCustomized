@@ -5,7 +5,7 @@
 | Version | Supported |
 |---------|-----------|
 | `main`  | Yes |
-| Latest release tag (e.g. `v1.1.0`) | Yes, same fixes as `main` when applicable |
+| Latest release tag (e.g. `v1.2.0`) | Yes, same fixes as `main` when applicable |
 | Older tags | Best effort only |
 
 Security fixes land on `main` first, then release tags as needed.
