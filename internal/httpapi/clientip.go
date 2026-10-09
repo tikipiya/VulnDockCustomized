@@ -20,8 +20,21 @@ func isLoopbackIP(ipStr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func requestBehindReverseProxy(r *http.Request) bool {
+	if strings.TrimSpace(r.Header.Get("X-Forwarded-For")) != "" {
+		return true
+	}
+	if strings.TrimSpace(r.Header.Get("X-Real-IP")) != "" {
+		return true
+	}
+	if strings.TrimSpace(r.Header.Get("Forwarded")) != "" {
+		return true
+	}
+	return false
+}
+
 func allowInitialSetup(r *http.Request, setupToken string, tokenFromRequest string, trustLoopback bool) bool {
-	if trustLoopback && isLoopbackIP(clientIP(r)) {
+	if trustLoopback && isLoopbackIP(clientIP(r)) && !requestBehindReverseProxy(r) {
 		return true
 	}
 	if setupToken == "" {
