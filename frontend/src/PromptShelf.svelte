@@ -26,7 +26,7 @@
   let selectedPrompt = $derived(prompts.find((p) => p.id === selectedId))
 
   $effect(() => {
-    if (reloadSignal > 0) {
+    if (reloadSignal > 0 && open) {
       void loadPrompts()
     }
   })
@@ -71,10 +71,16 @@
   }
 
   async function toggleOpen() {
-    open = !open
     if (open) {
-      await loadPrompts()
+      open = false
+      return
     }
+    if (!confirmDiscard()) {
+      return
+    }
+    open = true
+    errorMessage = ''
+    await loadPrompts()
   }
 
   function selectPrompt(id: string, options: { skipDiscardCheck?: boolean } = {}) {

@@ -10,11 +10,23 @@ export function getCsrfToken(): string {
   return csrfToken
 }
 
+function apiErrorMessage(response: Response, body: Record<string, unknown>): string {
+  if (typeof body?.error === 'string' && body.error.trim()) {
+    return body.error
+  }
+  if (response.status === 404) {
+    return 'プロンプト API が見つかりません。vulndock-customized を最新版でビルドし、プロセスを再起動してください。'
+  }
+  if (response.status === 401) {
+    return 'ログインが必要です。ページを再読み込みしてログインしてください。'
+  }
+  return response.statusText || 'request failed'
+}
+
 async function parseJSON<T>(response: Response): Promise<T> {
-  const body = await response.json().catch(() => ({}))
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
   if (!response.ok) {
-    const message = typeof body?.error === 'string' ? body.error : response.statusText
-    throw new Error(message || 'request failed')
+    throw new Error(apiErrorMessage(response, body))
   }
   return body as T
 }

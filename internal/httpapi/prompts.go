@@ -48,8 +48,16 @@ func (s *Server) handlePromptSubroutes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, errNotConfigured("prompts"))
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/prompts/")
-	if id == "" || strings.Contains(id, "/") {
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/prompts/"), "/")
+	if id == "" {
+		if r.Method == http.MethodGet {
+			s.handlePrompts(w, r)
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
+	if strings.Contains(id, "/") {
 		http.NotFound(w, r)
 		return
 	}

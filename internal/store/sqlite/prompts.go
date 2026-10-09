@@ -8,7 +8,26 @@ import (
 	"VulnDock/internal/domain"
 )
 
+const savedPromptsSchema = `
+CREATE TABLE IF NOT EXISTS saved_prompts (
+  id TEXT PRIMARY KEY NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_saved_prompts_updated ON saved_prompts(updated_at);
+`
+
+func (s *Store) ensureSavedPromptsSchema(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, savedPromptsSchema)
+	return err
+}
+
 func (s *Store) ListSavedPrompts(ctx context.Context) ([]domain.SavedPrompt, error) {
+	if err := s.ensureSavedPromptsSchema(ctx); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, title, body, created_at, updated_at
 		FROM saved_prompts
@@ -45,6 +64,9 @@ func (s *Store) GetSavedPrompt(ctx context.Context, id string) (domain.SavedProm
 }
 
 func (s *Store) SaveSavedPrompt(ctx context.Context, prompt domain.SavedPrompt) error {
+	if err := s.ensureSavedPromptsSchema(ctx); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO saved_prompts(id, title, body, created_at, updated_at)
 		VALUES (?,?,?,?,?)
