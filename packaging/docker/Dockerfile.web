@@ -2,7 +2,11 @@ FROM ubuntu:24.04@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --system vulndock \
+  && useradd --system --gid vulndock --home-dir /data --no-create-home vulndock \
+  && mkdir -p /data \
+  && chown vulndock:vulndock /data
 
 WORKDIR /opt/vulndock-customized
 
@@ -13,5 +17,7 @@ ENV VULNDOCK_DATA_DIR=/data
 
 EXPOSE 8080
 VOLUME ["/data"]
+
+USER vulndock
 
 ENTRYPOINT ["/usr/local/bin/vulndock-customized"]
