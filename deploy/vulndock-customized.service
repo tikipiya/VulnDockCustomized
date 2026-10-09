@@ -1,0 +1,20 @@
+[Unit]
+Description=VulnDockCustomized self-hosted web app
+After=network.target
+
+[Service]
+Type=simple
+User=vulndock
+Group=vulndock
+UMask=0077
+Environment=VULNDOCK_BIND=0.0.0.0:8080
+Environment=VULNDOCK_DATA_DIR=/var/lib/vulndock-customized
+# Set a strong random token before first start; required for initial setup.
+Environment=VULNDOCK_SETUP_TOKEN=change-me-before-first-boot
+# Enable when TLS terminates in front of the app (reverse proxy HTTPS).
+Environment=VULNDOCK_SECURE_COOKIES=true
+ExecStart=/opt/vulndock-customized/vulndock-customized
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

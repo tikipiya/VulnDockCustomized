@@ -1,6 +1,8 @@
 package main
 
 import (
+	bkp "VulnDock/internal/backup"
+
 	"archive/zip"
 	"bytes"
 	"encoding/base64"
@@ -448,17 +450,17 @@ func TestEncryptedBackupRoundTripRestoresReportsAndAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backup, err := source.CreateEncryptedBackup("correct horse battery staple")
+	encBackup, err := source.CreateEncryptedBackup("correct horse battery staple")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(backup.FileName, ".zip") {
-		t.Fatalf("backup.FileName = %q, want .zip suffix", backup.FileName)
+	if !strings.HasSuffix(encBackup.FileName, ".zip") {
+		t.Fatalf("encBackup.FileName = %q, want .zip suffix", encBackup.FileName)
 	}
-	if strings.Contains(backup.FileName, time.Now().UTC().Format("20060102")) {
-		t.Fatalf("backup.FileName = %q leaks creation date", backup.FileName)
+	if strings.Contains(encBackup.FileName, time.Now().UTC().Format("20060102")) {
+		t.Fatalf("encBackup.FileName = %q leaks creation date", encBackup.FileName)
 	}
-	archive, err := base64.StdEncoding.DecodeString(backup.Data)
+	archive, err := base64.StdEncoding.DecodeString(encBackup.Data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,11 +470,11 @@ func TestEncryptedBackupRoundTripRestoresReportsAndAttachments(t *testing.T) {
 
 	target := NewApp()
 	target.storePath = filepath.Join(t.TempDir(), "reports.json")
-	if _, err := target.RestoreEncryptedBackup(backup.Data, "wrong password"); err == nil {
+	if _, err := target.RestoreEncryptedBackup(encBackup.Data, "wrong password"); err == nil {
 		t.Fatal("RestoreEncryptedBackup accepted the wrong password")
 	}
 
-	restored, err := target.RestoreEncryptedBackup("data:application/zip;base64,"+backup.Data, "correct horse battery staple")
+	restored, err := target.RestoreEncryptedBackup("data:application/zip;base64,"+encBackup.Data, "correct horse battery staple")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,11 +513,11 @@ func TestEncryptedBackupZipContainsOnlyManifestAndCiphertext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backup, err := source.CreateEncryptedBackup("strong backup password")
+	encBackup, err := source.CreateEncryptedBackup("strong backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	archive := decodeBackupDataForTest(t, backup.Data)
+	archive := decodeBackupDataForTest(t, encBackup.Data)
 	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		t.Fatal(err)
@@ -541,22 +543,22 @@ func TestEncryptedBackupZipContainsOnlyManifestAndCiphertext(t *testing.T) {
 			}
 		}
 	}
-	if len(names) != 2 || !names[encryptedBackupManifestName] || !names[encryptedBackupPayloadName] {
+	if len(names) != 2 || !names[bkp.ManifestName] || !names[bkp.PayloadName] {
 		t.Fatalf("backup zip entries = %#v, want only manifest and encrypted payload", names)
 	}
 
-	manifest, ciphertext, err := readEncryptedBackupZip(archive)
+	manifest, ciphertext, err := bkp.ReadZip(archive)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Algorithm != encryptedBackupAlgorithm {
-		t.Fatalf("manifest.Algorithm = %q, want %q", manifest.Algorithm, encryptedBackupAlgorithm)
+	if manifest.Algorithm != bkp.Algorithm {
+		t.Fatalf("manifest.Algorithm = %q, want %q", manifest.Algorithm, bkp.Algorithm)
 	}
-	if manifest.KDF != encryptedBackupKDF {
-		t.Fatalf("manifest.KDF = %q, want %q", manifest.KDF, encryptedBackupKDF)
+	if manifest.KDF != bkp.KDF {
+		t.Fatalf("manifest.KDF = %q, want %q", manifest.KDF, bkp.KDF)
 	}
-	if manifest.KDFParams != defaultBackupKDFParams() {
-		t.Fatalf("manifest.KDFParams = %#v, want %#v", manifest.KDFParams, defaultBackupKDFParams())
+	if manifest.KDFParams != bkp.DefaultKDFParams() {
+		t.Fatalf("manifest.KDFParams = %#v, want %#v", manifest.KDFParams, bkp.DefaultKDFParams())
 	}
 	if strings.Contains(string(ciphertext), "Sensitive backup title") || strings.Contains(string(ciphertext), "secret-poc") {
 		t.Fatalf("ciphertext leaked plaintext: %q", ciphertext)
@@ -634,7 +636,7 @@ func TestRestoreEncryptedBackupRejectsTamperedCiphertextWithoutChangingExistingD
 	}); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := source.CreateEncryptedBackup("backup password")
+	encBackup, err := source.CreateEncryptedBackup("backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +657,7 @@ func TestRestoreEncryptedBackupRejectsTamperedCiphertextWithoutChangingExistingD
 		t.Fatal(err)
 	}
 
-	tamperedArchive := tamperBackupCiphertextForTest(t, backup.Data)
+	tamperedArchive := tamperBackupCiphertextForTest(t, encBackup.Data)
 	if _, err := target.RestoreEncryptedBackup(tamperedArchive, "backup password"); err == nil {
 		t.Fatal("RestoreEncryptedBackup accepted tampered ciphertext")
 	}
@@ -682,18 +684,18 @@ func TestRestoreEncryptedBackupRejectsUnsupportedKDFParams(t *testing.T) {
 	if _, err := source.SaveReport(ReportDraft{Title: "KDF test"}); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := source.CreateEncryptedBackup("backup password")
+	encBackup, err := source.CreateEncryptedBackup("backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	archive := decodeBackupDataForTest(t, backup.Data)
-	manifest, ciphertext, err := readEncryptedBackupZip(archive)
+	archive := decodeBackupDataForTest(t, encBackup.Data)
+	manifest, ciphertext, err := bkp.ReadZip(archive)
 	if err != nil {
 		t.Fatal(err)
 	}
 	manifest.KDFParams.Memory = manifest.KDFParams.Memory * 2
-	rebuilt, err := buildEncryptedBackupZip(manifest, ciphertext)
+	rebuilt, err := bkp.BuildZip(manifest, ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -711,36 +713,36 @@ func TestRestoreEncryptedBackupRejectsTamperedManifestWithoutChangingExistingDat
 	if _, err := source.SaveReport(ReportDraft{Title: "Manifest source"}); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := source.CreateEncryptedBackup("backup password")
+	encBackup, err := source.CreateEncryptedBackup("backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tests := []struct {
 		name   string
-		mutate func(*encryptedBackupManifest)
+		mutate func(*bkp.Manifest)
 	}{
 		{
 			name: "format",
-			mutate: func(manifest *encryptedBackupManifest) {
-				manifest.Format = "vulndock.encrypted-backup.v999"
+			mutate: func(manifest *bkp.Manifest) {
+				manifest.Format = "vulndock.encrypted-bkp.v999"
 			},
 		},
 		{
 			name: "algorithm",
-			mutate: func(manifest *encryptedBackupManifest) {
+			mutate: func(manifest *bkp.Manifest) {
 				manifest.Algorithm = "AES-CBC"
 			},
 		},
 		{
 			name: "kdf",
-			mutate: func(manifest *encryptedBackupManifest) {
+			mutate: func(manifest *bkp.Manifest) {
 				manifest.KDF = "pbkdf2"
 			},
 		},
 		{
 			name: "salt",
-			mutate: func(manifest *encryptedBackupManifest) {
+			mutate: func(manifest *bkp.Manifest) {
 				salt, err := base64.StdEncoding.DecodeString(manifest.Salt)
 				if err != nil {
 					t.Fatal(err)
@@ -751,7 +753,7 @@ func TestRestoreEncryptedBackupRejectsTamperedManifestWithoutChangingExistingDat
 		},
 		{
 			name: "nonce",
-			mutate: func(manifest *encryptedBackupManifest) {
+			mutate: func(manifest *bkp.Manifest) {
 				nonce, err := base64.StdEncoding.DecodeString(manifest.Nonce)
 				if err != nil {
 					t.Fatal(err)
@@ -765,7 +767,7 @@ func TestRestoreEncryptedBackupRejectsTamperedManifestWithoutChangingExistingDat
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			target, existingPath := appWithExistingRestoreDataForTest(t)
-			mutatedBackup := mutateBackupManifestForTest(t, backup.Data, tt.mutate)
+			mutatedBackup := mutateBackupManifestForTest(t, encBackup.Data, tt.mutate)
 
 			if _, err := target.RestoreEncryptedBackup(mutatedBackup, "backup password"); err == nil {
 				t.Fatal("RestoreEncryptedBackup accepted a tampered manifest")
@@ -781,13 +783,13 @@ func TestRestoreEncryptedBackupRejectsMissingZipEntriesWithoutChangingExistingDa
 	if _, err := source.SaveReport(ReportDraft{Title: "ZIP source"}); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := source.CreateEncryptedBackup("backup password")
+	encBackup, err := source.CreateEncryptedBackup("backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	archive := decodeBackupDataForTest(t, backup.Data)
-	manifest, ciphertext, err := readEncryptedBackupZip(archive)
+	archive := decodeBackupDataForTest(t, encBackup.Data)
+	manifest, ciphertext, err := bkp.ReadZip(archive)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -826,28 +828,28 @@ func TestRestoreEncryptedBackupRejectsMissingZipEntriesWithoutChangingExistingDa
 func TestRestoreEncryptedBackupRejectsEncryptedUnsafePayloadWithoutChangingExistingData(t *testing.T) {
 	tests := []struct {
 		name    string
-		payload encryptedBackupPayload
+		payload bkp.Payload
 	}{
 		{
 			name: "report points outside attachments",
-			payload: encryptedBackupPayload{
-				Format: encryptedBackupFormat,
-				Reports: []Report{{
+			payload: bkp.Payload{
+				Format: bkp.Format,
+				Reports: reportsToDomain([]Report{{
 					Title:    "Malicious payload",
 					PocFiles: []PocFile{{Name: "poc.txt", Path: "attachments/../reports.json"}},
-				}},
-				Attachments: []backupAttachment{{Path: "attachments/attachment_1/poc.txt", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
+				}}),
+				Attachments: []bkp.Attachment{{Path: "attachments/attachment_1/poc.txt", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
 			},
 		},
 		{
 			name: "attachment content path escapes",
-			payload: encryptedBackupPayload{
-				Format: encryptedBackupFormat,
-				Reports: []Report{{
+			payload: bkp.Payload{
+				Format: bkp.Format,
+				Reports: reportsToDomain([]Report{{
 					Title:    "Malicious payload",
 					PocFiles: []PocFile{{Name: "poc.txt", Path: "attachments/attachment_1/poc.txt"}},
-				}},
-				Attachments: []backupAttachment{{Path: "attachments/attachment_1/../../reports.json", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
+				}}),
+				Attachments: []bkp.Attachment{{Path: "attachments/attachment_1/../../reports.json", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
 			},
 		},
 	}
@@ -879,13 +881,13 @@ func TestRestoreEncryptedBackupReplacesExistingDataAndRemovesOldAttachments(t *t
 	}); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := source.CreateEncryptedBackup("backup password")
+	encBackup, err := source.CreateEncryptedBackup("backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	target, oldAttachmentPath := appWithExistingRestoreDataForTest(t)
-	restored, err := target.RestoreEncryptedBackup(backup.Data, "backup password")
+	restored, err := target.RestoreEncryptedBackup(encBackup.Data, "backup password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,7 +929,7 @@ func TestRestoreEncryptedBackupRejectsMalformedArchiveInputs(t *testing.T) {
 	app, existingPath := appWithExistingRestoreDataForTest(t)
 	withMaxEncryptedBackupBytesForTest(t, 32)
 
-	largeArchive := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("x"), maxEncryptedBackupBytes+1))
+	largeArchive := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("x"), bkp.MaxEncryptedBytes+1))
 	tests := []struct {
 		name string
 		data string
@@ -951,18 +953,18 @@ func TestRestoreEncryptedBackupRejectsMalformedArchiveInputs(t *testing.T) {
 func TestReadEncryptedBackupZipRejectsOversizedEntries(t *testing.T) {
 	withMaxEncryptedBackupBytesForTest(t, 32)
 
-	manifest := encryptedBackupManifest{
-		Format:    encryptedBackupFormat,
-		Algorithm: encryptedBackupAlgorithm,
-		KDF:       encryptedBackupKDF,
-		KDFParams: defaultBackupKDFParams(),
+	manifest := bkp.Manifest{
+		Format:    bkp.Format,
+		Algorithm: bkp.Algorithm,
+		KDF:       bkp.KDF,
+		KDFParams: bkp.DefaultKDFParams(),
 		Salt:      base64.StdEncoding.EncodeToString([]byte("1234567890123456")),
 		Nonce:     base64.StdEncoding.EncodeToString([]byte("123456789012")),
 	}
-	archive := buildBackupZipForTest(t, &manifest, bytes.Repeat([]byte("x"), maxEncryptedBackupBytes+1))
+	archive := buildBackupZipForTest(t, &manifest, bytes.Repeat([]byte("x"), bkp.MaxEncryptedBytes+1))
 
-	if _, _, err := readEncryptedBackupZip(archive); err == nil {
-		t.Fatal("readEncryptedBackupZip accepted an oversized payload entry")
+	if _, _, err := bkp.ReadZip(archive); err == nil {
+		t.Fatal("bkp.ReadZip accepted an oversized payload entry")
 	}
 }
 
@@ -980,11 +982,11 @@ func TestEncryptedBackupPasswordBoundaries(t *testing.T) {
 	}
 
 	for _, password := range []string{"正しい パスワード 🔐", strings.Repeat("long-password-", 128)} {
-		backup, err := app.CreateEncryptedBackup(password)
+		encBackup, err := app.CreateEncryptedBackup(password)
 		if err != nil {
 			t.Fatalf("CreateEncryptedBackup(%q) failed: %v", password, err)
 		}
-		restored, err := app.RestoreEncryptedBackup(backup.Data, password)
+		restored, err := app.RestoreEncryptedBackup(encBackup.Data, password)
 		if err != nil {
 			t.Fatalf("RestoreEncryptedBackup(%q) failed: %v", password, err)
 		}
@@ -1018,11 +1020,11 @@ func TestEncryptedBackupIsNonDeterministicForSameDataAndPassword(t *testing.T) {
 		t.Fatal("encrypted backups for same data and password were identical")
 	}
 
-	firstManifest, firstCiphertext, err := readEncryptedBackupZip(decodeBackupDataForTest(t, first.Data))
+	firstManifest, firstCiphertext, err := bkp.ReadZip(decodeBackupDataForTest(t, first.Data))
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondManifest, secondCiphertext, err := readEncryptedBackupZip(decodeBackupDataForTest(t, second.Data))
+	secondManifest, secondCiphertext, err := bkp.ReadZip(decodeBackupDataForTest(t, second.Data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1038,9 +1040,9 @@ func TestEncryptedBackupIsNonDeterministicForSameDataAndPassword(t *testing.T) {
 }
 
 func TestRestoreEncryptedBackupHandlesDuplicateReferencesAndRemovesOrphanPayloadAttachments(t *testing.T) {
-	payload := encryptedBackupPayload{
-		Format: encryptedBackupFormat,
-		Reports: []Report{
+	payload := bkp.Payload{
+		Format: bkp.Format,
+		Reports: reportsToDomain([]Report{
 			{
 				ID:       "one",
 				Title:    "Shared attachment one",
@@ -1051,8 +1053,8 @@ func TestRestoreEncryptedBackupHandlesDuplicateReferencesAndRemovesOrphanPayload
 				Title:    "Shared attachment two",
 				PocFiles: []PocFile{{ID: "attachment_shared", Name: "shared.txt", Type: "text/plain", Size: 6, Path: "attachments/attachment_shared/shared.txt"}},
 			},
-		},
-		Attachments: []backupAttachment{
+		}),
+		Attachments: []bkp.Attachment{
 			{Path: "attachments/attachment_shared/shared.txt", Data: base64.StdEncoding.EncodeToString([]byte("shared"))},
 			{Path: "attachments/attachment_orphan/orphan.txt", Data: base64.StdEncoding.EncodeToString([]byte("orphan"))},
 		},
@@ -1143,46 +1145,46 @@ func TestRestoredDataCanBeReBackedUpAndRestoredAgain(t *testing.T) {
 func TestNormalizeBackupPayloadRejectsUnsafeOrMissingAttachments(t *testing.T) {
 	tests := []struct {
 		name    string
-		payload encryptedBackupPayload
+		payload bkp.Payload
 	}{
 		{
 			name: "attachment path outside attachments",
-			payload: encryptedBackupPayload{
-				Format: encryptedBackupFormat,
-				Reports: []Report{{
+			payload: bkp.Payload{
+				Format: bkp.Format,
+				Reports: reportsToDomain([]Report{{
 					Title:    "Unsafe path",
 					PocFiles: []PocFile{{Name: "poc.txt", Path: "attachments/../reports.json"}},
-				}},
-				Attachments: []backupAttachment{{Path: "attachments/../reports.json", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
+				}}),
+				Attachments: []bkp.Attachment{{Path: "attachments/../reports.json", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
 			},
 		},
 		{
 			name: "attachment content missing",
-			payload: encryptedBackupPayload{
-				Format: encryptedBackupFormat,
-				Reports: []Report{{
+			payload: bkp.Payload{
+				Format: bkp.Format,
+				Reports: reportsToDomain([]Report{{
 					Title:    "Missing attachment",
 					PocFiles: []PocFile{{Name: "poc.txt", Path: "attachments/attachment_1/poc.txt"}},
-				}},
+				}}),
 			},
 		},
 		{
 			name: "attachment path not under attachments",
-			payload: encryptedBackupPayload{
-				Format: encryptedBackupFormat,
-				Reports: []Report{{
+			payload: bkp.Payload{
+				Format: bkp.Format,
+				Reports: reportsToDomain([]Report{{
 					Title:    "Wrong root",
 					PocFiles: []PocFile{{Name: "poc.txt", Path: "reports.json"}},
-				}},
-				Attachments: []backupAttachment{{Path: "reports.json", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
+				}}),
+				Attachments: []bkp.Attachment{{Path: "reports.json", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := normalizeBackupPayload(tt.payload); err == nil {
-				t.Fatal("normalizeBackupPayload accepted invalid backup payload")
+			if _, _, err := bkp.NormalizePayload(tt.payload); err == nil {
+				t.Fatal("bkp.NormalizePayload accepted invalid backup payload")
 			}
 		})
 	}
@@ -1214,7 +1216,7 @@ func tamperBackupCiphertextForTest(t *testing.T, backupData string) string {
 	t.Helper()
 
 	archive := decodeBackupDataForTest(t, backupData)
-	manifest, ciphertext, err := readEncryptedBackupZip(archive)
+	manifest, ciphertext, err := bkp.ReadZip(archive)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1222,48 +1224,48 @@ func tamperBackupCiphertextForTest(t *testing.T, backupData string) string {
 		t.Fatal("ciphertext is empty")
 	}
 	ciphertext[len(ciphertext)-1] ^= 0xff
-	rebuilt, err := buildEncryptedBackupZip(manifest, ciphertext)
+	rebuilt, err := bkp.BuildZip(manifest, ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return base64.StdEncoding.EncodeToString(rebuilt)
 }
 
-func mutateBackupManifestForTest(t *testing.T, backupData string, mutate func(*encryptedBackupManifest)) string {
+func mutateBackupManifestForTest(t *testing.T, backupData string, mutate func(*bkp.Manifest)) string {
 	t.Helper()
 
 	archive := decodeBackupDataForTest(t, backupData)
-	manifest, ciphertext, err := readEncryptedBackupZip(archive)
+	manifest, ciphertext, err := bkp.ReadZip(archive)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mutate(&manifest)
-	rebuilt, err := buildEncryptedBackupZip(manifest, ciphertext)
+	rebuilt, err := bkp.BuildZip(manifest, ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return base64.StdEncoding.EncodeToString(rebuilt)
 }
 
-func encryptedBackupFromPayloadForTest(t *testing.T, payload encryptedBackupPayload, password string) string {
+func encryptedBackupFromPayloadForTest(t *testing.T, payload bkp.Payload, password string) string {
 	t.Helper()
 
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, ciphertext, err := encryptBackupPayload(payloadJSON, password)
+	manifest, ciphertext, err := bkp.EncryptPayload(payloadJSON, password)
 	if err != nil {
 		t.Fatal(err)
 	}
-	archive, err := buildEncryptedBackupZip(manifest, ciphertext)
+	archive, err := bkp.BuildZip(manifest, ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return base64.StdEncoding.EncodeToString(archive)
 }
 
-func buildBackupZipForTest(t *testing.T, manifest *encryptedBackupManifest, ciphertext []byte) []byte {
+func buildBackupZipForTest(t *testing.T, manifest *bkp.Manifest, ciphertext []byte) []byte {
 	t.Helper()
 
 	var buffer bytes.Buffer
@@ -1273,12 +1275,12 @@ func buildBackupZipForTest(t *testing.T, manifest *encryptedBackupManifest, ciph
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := writeZipFile(archive, encryptedBackupManifestName, manifestJSON); err != nil {
+		if err := writeZipFile(archive, bkp.ManifestName, manifestJSON); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if ciphertext != nil {
-		if err := writeZipFile(archive, encryptedBackupPayloadName, ciphertext); err != nil {
+		if err := writeZipFile(archive, bkp.PayloadName, ciphertext); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1290,12 +1292,7 @@ func buildBackupZipForTest(t *testing.T, manifest *encryptedBackupManifest, ciph
 
 func withMaxEncryptedBackupBytesForTest(t *testing.T, value int) {
 	t.Helper()
-
-	original := maxEncryptedBackupBytes
-	maxEncryptedBackupBytes = value
-	t.Cleanup(func() {
-		maxEncryptedBackupBytes = original
-	})
+	t.Cleanup(bkp.SetMaxZipEntryBytesForTest(value))
 }
 
 func appWithExistingRestoreDataForTest(t *testing.T) (*App, string) {

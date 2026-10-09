@@ -1,6 +1,11 @@
+// Legacy Wails desktop App type and file-backed store. Retained for encrypted-backup
+// compatibility tests in app_test.go; the self-hosted server uses cmd/vulndock-customized.
 package main
 
 import (
+	"VulnDock/internal/backup"
+	"VulnDock/internal/domain"
+
 	"archive/zip"
 	"bytes"
 	"context"
@@ -259,87 +264,40 @@ func (a *App) OpenPocFile(file PocFile) (string, error) {
 }
 
 func (a *App) CreateEncryptedBackup(password string) (EncryptedBackup, error) {
-	if err := validateBackupPassword(password); err != nil {
-		return EncryptedBackup{}, err
-	}
-
 	reports, err := a.loadReports()
 	if err != nil {
 		return EncryptedBackup{}, err
 	}
-
-	payload, err := a.buildBackupPayload(reports)
-	if err != nil {
-		return EncryptedBackup{}, err
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return EncryptedBackup{}, err
-	}
-
-	manifest, ciphertext, err := encryptBackupPayload(payloadJSON, password)
-	if err != nil {
-		return EncryptedBackup{}, err
-	}
-
-	archive, err := buildEncryptedBackupZip(manifest, ciphertext)
-	if err != nil {
-		return EncryptedBackup{}, err
-	}
-
-	suffix, err := randomHex(6)
+	result, err := backup.ExportZip(reportsToDomain(reports), func(file domain.PocFile) ([]byte, error) {
+		poc := fromDomainPocFile(file)
+		path, err := a.attachmentAbsolutePath(poc)
+		if err != nil {
+			return nil, err
+		}
+		return readSecureAttachmentFile(a.attachmentsDir(), path)
+	}, password)
 	if err != nil {
 		return EncryptedBackup{}, err
 	}
 	return EncryptedBackup{
-		FileName: "vulndock-backup-" + suffix + ".zip",
-		Data:     base64.StdEncoding.EncodeToString(archive),
+		FileName: result.FileName,
+		Data:     base64.StdEncoding.EncodeToString(result.Data),
 	}, nil
 }
 
 func (a *App) RestoreEncryptedBackup(archiveData string, password string) ([]Report, error) {
-	if err := validateBackupPassword(password); err != nil {
-		return nil, err
-	}
-
-	archive, err := decodeBackupArchiveData(archiveData)
+	archive, err := backup.DecodeArchiveData(archiveData)
 	if err != nil {
 		return nil, err
 	}
-	if len(archive) > maxEncryptedBackupBytes {
-		return nil, errors.New("backup archive is too large")
-	}
-
-	manifest, ciphertext, err := readEncryptedBackupZip(archive)
+	reports, attachments, err := backup.ImportZip(archive, password)
 	if err != nil {
 		return nil, err
 	}
-	payloadJSON, err := decryptBackupPayload(manifest, ciphertext, password)
-	if err != nil {
+	if err := a.restoreBackupPayload(reportsFromDomain(reports), attachments); err != nil {
 		return nil, err
 	}
-
-	var payload encryptedBackupPayload
-	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
-		return nil, err
-	}
-	if payload.Format != encryptedBackupFormat {
-		return nil, errors.New("unsupported encrypted backup payload")
-	}
-
-	reports, attachments, err := normalizeBackupPayload(payload)
-	if err != nil {
-		return nil, err
-	}
-	if err := a.restoreBackupPayload(reports, attachments); err != nil {
-		return nil, err
-	}
-
-	reports, err = a.loadReports()
-	if err != nil {
-		return nil, err
-	}
-	return reports, nil
+	return a.loadReports()
 }
 
 func (a *App) loadReports() ([]Report, error) {

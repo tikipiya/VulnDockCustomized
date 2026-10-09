@@ -1,83 +1,75 @@
-# Contributing to VulnDock
+# Contributing to VulnDockCustomized
 
-Thank you for considering a contribution to VulnDock. Contributions are handled through GitHub issues and pull requests.
+Thank you for considering a contribution. This fork is a **self-hosted web application** (Go + Svelte). The upstream Wails desktop flow no longer applies.
 
-## Reporting Bugs and Requesting Enhancements
+## Reporting bugs and enhancements
 
-Use GitHub Issues for public bug reports, feature requests, documentation improvements, and build problems. Include enough detail for maintainers to reproduce or evaluate the report:
+Use GitHub Issues with:
 
-- What you expected to happen.
-- What actually happened.
-- Steps to reproduce the behavior.
-- Operating system and desktop environment, if relevant.
-- Relevant logs, screenshots, or sample input that does not contain sensitive data.
+- Expected vs actual behavior
+- Steps to reproduce
+- Server OS, browser, and how you deploy (binary, systemd, Docker)
+- Relevant logs (no secrets, PoC payloads, or report contents)
 
-Do not report suspected security vulnerabilities in a public issue. Follow [SECURITY.md](SECURITY.md) instead.
+Do **not** report security vulnerabilities in public issues. See [SECURITY.md](SECURITY.md).
 
-## Contribution Process
+## Development setup
 
-1. Open an issue or comment on an existing issue when the change is user-visible, security-sensitive, or likely to need discussion.
-2. Fork the repository and create a focused branch.
-3. Make the smallest practical change that solves the problem.
-4. Add or update tests and documentation when behavior changes.
-5. Run the project checks locally.
-6. Open a pull request that explains the change, the reason for it, and the checks you ran.
-
-Pull requests are reviewed on GitHub. A maintainer may ask for changes before merging.
-
-## Development Setup
-
-Install the required tools listed in [README.md](README.md#requirements), then install frontend dependencies:
+Requirements: Go 1.26.4+, Node.js 22+, npm.
 
 ```sh
 make install
 ```
 
-Run the desktop app in development mode:
+Run the API server:
 
 ```sh
-make dev
+make build
+VULNDOCK_BIND=127.0.0.1:8080 VULNDOCK_TRUST_LOOPBACK_SETUP=true ./build/bin/vulndock-customized
 ```
 
-## Required Checks
+Run the frontend dev server (proxies `/api` to port 8080):
 
-Before opening a pull request, run:
+```sh
+make frontend-dev
+```
+
+## Required checks
+
+Before opening a pull request:
 
 ```sh
 make check
 ```
 
-For focused checks, run:
+This runs `go test ./...`, `npm run check`, and `npm test` under `frontend/`.
+
+Focused commands:
 
 ```sh
 go test ./...
+go build ./cmd/vulndock-customized
 npm test --prefix frontend
 npm run check --prefix frontend
 npm run build --prefix frontend
 ```
 
-If you change Go module requirements, run:
+If you change Go modules:
 
 ```sh
 go mod tidy
 ```
 
-## Contribution Requirements
+Ensure `gofmt` is clean (`gofmt -l .` should print nothing).
 
-Acceptable contributions should meet these requirements:
+## Contribution guidelines
 
-- Go code must be formatted with `gofmt`.
-- TypeScript and Svelte code must pass `npm run check --prefix frontend`.
-- Tests must pass for the affected backend or frontend area.
-- User-visible behavior changes should update README or documentation.
-- New dependencies should be necessary, maintained, and compatible with the project license.
-- Do not commit generated build outputs, local report data, credentials, tokens, or private vulnerability details.
-- Keep pull requests focused. Separate unrelated changes into separate pull requests.
-
-## Security-Sensitive Changes
-
-For changes that affect report storage, PoC attachment handling, release signing, dependency management, or GitHub Actions permissions, include a short security rationale in the pull request description.
+- Keep pull requests focused.
+- Update [README.md](README.md) or [docs/WEB_SELF_HOST.md](docs/WEB_SELF_HOST.md) for user-visible behavior changes.
+- Add tests when fixing bugs or changing domain logic (`app.go` tests cover legacy backup/crypto; prefer tests for new `internal/` code when practical).
+- Do not commit credentials, local databases, or real vulnerability data.
+- For auth, sessions, attachment storage, or CI permission changes, include a short security note in the PR.
 
 ## License
 
-By contributing, you agree that your contribution will be released under the project's MIT license.
+Contributions are released under the MIT license.

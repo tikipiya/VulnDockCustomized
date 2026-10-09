@@ -1,221 +1,163 @@
-# VulnDock
+# VulnDockCustomized
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Saku0512/VulnDock)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Saku0512/VulnDock/badge)](https://scorecard.dev/viewer/?uri=github.com/Saku0512/VulnDock)
-[![OpenSSF Baseline](https://www.bestpractices.dev/projects/13463/baseline)](https://www.bestpractices.dev/projects/13463)
-[![Latest Release](https://img.shields.io/github/v/release/Saku0512/VulnDock)](https://github.com/Saku0512/VulnDock/releases/latest)
-![Downloads](https://img.shields.io/github/downloads/Saku0512/VulnDock/total)
+**Self-hosted web edition** of [VulnDock](https://github.com/Saku0512/VulnDock) — a private workspace for vulnerability report metadata, PoC attachments, and CVSS vectors.  
+日本語の概要は [docs/README.ja.md](docs/README.ja.md) を参照してください。
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-VulnDock is a desktop app for organizing vulnerability report metadata, PoC attachments, and CVSS vectors in one local workspace. It is built with Wails, Go, Svelte, and TypeScript.
+This fork replaces the original **Wails desktop app** with a **Go HTTP server** and **Svelte** SPA you run on your own machine (LAN or Tailscale). It is not wire-compatible with upstream releases.
 
 ## Features
 
-- Create, edit, search, and delete vulnerability reports.
-- Track program, target asset, status, submission date, tags, and report URL.
-- Store PoC files as report attachments.
-- Calculate CVSS 3.1 and CVSS 4.0 scores automatically from vector strings.
-- Filter reports by status and CVSS rating.
-- Persist data locally as JSON.
-- Download and restore password-protected encrypted ZIP backups.
+- Create, edit, search, and soft-delete vulnerability reports (5-day retention before purge).
+- Track program, target asset, status, dates, rewards, tags, conversation logs, and report URLs.
+- Store PoC files in **SQLite** (BLOB, 50 MB per file).
+- **CVSS 3.1 / 4.0** scoring from vector strings (client-side).
+- Filter by status, CVSS rating, and next-action windows.
+- **Single-user** access: setup wizard, session cookie (72 h sliding), password change, CSRF on mutating API calls.
+- Import legacy desktop data: `vulndock-customized migrate --from-json`.
 
-## Data Storage
-
-Reports are stored locally at:
-
-```text
-~/.config/VulnDock/reports.json
-```
-
-PoC attachment metadata is stored in `reports.json`. Attachment file contents are stored separately under:
-
-```text
-~/.config/VulnDock/attachments/
-```
-
-Existing data URL attachments are migrated into the attachments directory the next time reports are loaded. Avoid attaching secrets, production credentials, customer data, or any material you should not keep in local application data.
-
-Encrypted backup ZIP files contain an AES-256-GCM encrypted payload with report data and attachment contents. Backup keys are derived from the user-provided password with Argon2id, and restore fails if password verification or payload authentication fails.
+**v1.1.0:** encrypted ZIP backup export/restore (desktop-compatible format) via UI and `/api/backup/*`.
 
 ## Requirements
 
-- Go 1.26.4+
-- Node.js 22+
-- npm
-- Wails v2
-- Linux WebKit dependencies required by Wails when running or building on Linux
+- **Go** 1.26.4+
+- **Node.js** 22+ and **npm** (to build the frontend)
 
-## Setup
+No Wails or WebKit build dependencies.
 
-Install frontend dependencies:
+## Quick start
 
 ```sh
+git clone <your-repo-url>
+cd VulnDock
 make install
+make build
+./build/bin/vulndock-customized
 ```
 
-## Documentation
+Open `http://127.0.0.1:8080`, complete the **initial setup** (admin password), then use the app.
 
-- [User Guide](docs/USER_GUIDE.md) - usage, local data storage, and external interface details.
-- [Contributing](CONTRIBUTING.md) - contribution process, required checks, and contribution requirements.
-- [Security Policy](SECURITY.md) - private vulnerability reporting and security handling expectations.
+Default paths:
 
-## Install Desktop App
+| Item | Location |
+|------|----------|
+| SQLite database | `~/.local/share/vulndock-customized/vulndock-customized.db` |
+| Static UI (dev) | `frontend/dist` via `VULNDOCK_STATIC_DIR` |
+| Legacy import source | `~/.config/VulnDock/reports.json` (+ `attachments/`) |
 
-### Linux or macOS installer
-
-Install the latest release with the shell installer:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Saku0512/VulnDock/main/scripts/install.sh | bash
-```
-
-Install a specific release:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Saku0512/VulnDock/main/scripts/install.sh | VULNDOCK_VERSION=v0.1.0 bash
-```
-
-On Linux this installs `VulnDock` to `~/.local/bin`, adds a desktop entry under `~/.local/share/applications`, and installs the app icon under `~/.local/share/icons`. On macOS it installs `VulnDock.app` to `~/Applications`.
-
-### Homebrew
-
-Each GitHub Release includes a generated Homebrew formula. Download the formula for the release you want, then install it locally:
-
-```sh
-curl -LO https://github.com/Saku0512/VulnDock/releases/latest/download/vulndock.rb
-brew install ./vulndock.rb
-```
-
-For a pinned version, replace `latest/download` with `download/v0.1.0`.
-
-### Windows
-
-Download `VulnDock_windows_amd64.zip` from the GitHub Release page and run `VulnDock.exe`.
-
-Releases also include a `VulnDock_winget_<version>.zip` manifest bundle. After downloading and extracting it, install with WinGet from the extracted manifest directory:
-
-```powershell
-winget install --manifest .\manifests\s\Saku0512\VulnDock\0.1.0
-```
-
-When the package is published to the community WinGet repository, install it directly:
-
-```powershell
-winget install Saku0512.VulnDock
-```
-
-### Docker
-
-Tagged releases publish a Linux GUI image to GitHub Container Registry. This is mainly useful for testing on Linux hosts with a display server; native desktop packages are usually simpler for daily use.
-
-```sh
-xhost +local:docker
-docker run --rm \
-  -e DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v vulndock-data:/root/.config/VulnDock \
-  ghcr.io/saku0512/vulndock:latest
-```
+See [docs/WEB_SELF_HOST.md](docs/WEB_SELF_HOST.md) for environment variables, **systemd**, migration, and security notes.
 
 ## Development
 
-Run the Wails app in development mode:
+**API server** (terminal 1):
 
 ```sh
-make dev
+make build
+VULNDOCK_BIND=127.0.0.1:8080 ./build/bin/vulndock-customized
 ```
 
-Run only the frontend development server:
+**Frontend with hot reload** (terminal 2; proxies `/api` to port 8080):
 
 ```sh
 make frontend-dev
 ```
 
-## Testing
-
-Run backend and frontend unit tests:
+## Testing and checks
 
 ```sh
-make test
-```
-
-Run all checks used during development:
-
-```sh
-make check
-```
-
-Individual commands:
-
-```sh
+make check    # go test + npm check + npm test
+make test     # go test + npm test
 go test ./...
-npm test --prefix frontend
-npm run check --prefix frontend
-npm run build --prefix frontend
 ```
+
+Individual targets: `make go-test`, `make frontend-check`, `make frontend-test`, `make frontend-build`.
 
 ## Building
-
-Build a redistributable Wails package:
 
 ```sh
 make build
 ```
 
-Package the Linux desktop app in the same format used by GitHub Releases:
+Produces:
+
+- `build/bin/vulndock-customized` — server binary  
+- `frontend/dist/` — copied into the binary at build time (`make build` embeds the UI). Override with `VULNDOCK_STATIC_DIR` for development.
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VULNDOCK_BIND` | `0.0.0.0:8080` | Listen address |
+| `VULNDOCK_DATA_DIR` | `~/.local/share/vulndock-customized` | Data directory (SQLite) |
+| `VULNDOCK_STATIC_DIR` | `frontend/dist` if present | Path to built SPA |
+| `VULNDOCK_SETUP_TOKEN` | (auto-generated, logged once) | First-time setup (required unless loopback trust is enabled) |
+| `VULNDOCK_TRUST_LOOPBACK_SETUP` | `false` | If `true`, skip setup token when the server sees a loopback client (dev only; unsafe behind reverse proxies) |
+| `VULNDOCK_SECURE_COOKIES` | `false` | Set `true` when the app is served only over HTTPS (session cookie `Secure` flag) |
+
+First-time setup always requires the setup token unless you set `VULNDOCK_TRUST_LOOPBACK_SETUP=true` **and** connect directly to loopback (not through nginx/Caddy on `127.0.0.1:8080`).
+
+## Migrate from desktop VulnDock
 
 ```sh
-make package-linux
+./build/bin/vulndock-customized migrate --from-json
+# explicit path:
+./build/bin/vulndock-customized migrate --from-json ~/.config/VulnDock/reports.json
 ```
 
-Build only the frontend assets:
-
-```sh
-make frontend-build
-```
+Use `--force` if the database already contains reports. Use `--data-dir` to target a non-default data directory.
 
 ## Releasing
 
-Create and push a version tag to build desktop app artifacts and publish them to a GitHub Release:
+Push a version tag to run the release workflow (Linux archives + container image):
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-The release workflow uploads Linux, macOS, and Windows desktop app archives when the platform build succeeds. It also generates a Homebrew formula, bundles WinGet manifests, and publishes a Linux GUI Docker image to `ghcr.io/saku0512/vulndock`.
+Release assets are named `VulnDockCustomized_<os>_<arch>.tar.gz` (binary + `frontend/dist`).  
+Checksums and Sigstore bundles are attached when the publish job runs.
 
-Release assets include SHA-256 checksums and keyless Sigstore signatures generated by GitHub Actions. Verify an asset with Cosign by downloading the asset and its matching `.sigstore.json` bundle:
+## Project layout
 
-```sh
-cosign verify-blob \
-  --bundle VulnDock_linux_amd64.tar.gz.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/Saku0512/VulnDock/\.github/workflows/release\.yml@refs/tags/v.*$' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  VulnDock_linux_amd64.tar.gz
-```
+| Path | Purpose |
+|------|---------|
+| `cmd/vulndock-customized/` | Server CLI (`serve`, `migrate`) |
+| `internal/domain/` | Report model and normalization |
+| `internal/store/sqlite/` | SQLite persistence |
+| `internal/httpapi/` | REST API and SPA static handler |
+| `internal/auth/` | Password hash and sessions |
+| `internal/service/` | Report business logic |
+| `internal/migrate/` | JSON import from desktop layout |
+| `app.go` | Legacy file-based store (used by `go test` for backup/crypto behavior) |
+| `frontend/src/App.svelte` | Main UI |
+| `frontend/src/api/client.ts` | HTTP API client |
+| `deploy/vulndock-customized.service` | Example systemd unit |
+| `.github/workflows/ci.yml` | CI |
+| `.github/workflows/release.yml` | Tag releases |
 
-The `scripts/install.sh` installer downloads the matching Linux or macOS asset from the latest release by default.
+## Documentation
 
-## Project Layout
-
-- `app.go` - Go application model, persistence, and Wails bindings.
-- `main.go` - Wails application bootstrap and embedded frontend assets.
-- `frontend/src/App.svelte` - main UI.
-- `frontend/src/cvss.ts` - CVSS 3.1 and CVSS 4.0 scoring logic.
-- `frontend/test/` - frontend unit tests.
-- `.github/workflows/ci.yml` - GitHub Actions CI.
-- `.github/workflows/release.yml` - GitHub Actions release builds.
-- `scripts/install.sh` - installer for `curl | bash` installs from GitHub Releases.
-- `scripts/package-release-installers.sh` - release metadata generator for Homebrew and WinGet.
-- `packaging/docker/Dockerfile` - runtime image used by the release workflow.
+- [Self-hosted guide](docs/WEB_SELF_HOST.md) — operations (EN).
+- [日本語 README](docs/README.ja.md).
+- [Contributing](CONTRIBUTING.md).
+- [Security policy](SECURITY.md).
+- [User guide (legacy desktop)](docs/USER_GUIDE.md) — upstream-oriented; storage paths differ in this fork.
 
 ## CI
 
-GitHub Actions runs on pushes to `main` and pull requests. The workflow checks Go formatting, `go mod tidy`, Go tests, frontend type checks, frontend unit tests, and frontend build.
+On pushes to `main` and on pull requests, GitHub Actions runs:
 
-OpenSSF Scorecard runs on pushes to `main`, on a weekly schedule, and by manual dispatch. It publishes Scorecard results for the README badge and uploads SARIF results to GitHub code scanning.
+- `gofmt` and `go mod tidy` cleanliness  
+- `go test ./...`  
+- `go build ./cmd/vulndock-customized`  
+- Frontend `npm run check`, `npm test`, and `npm run build`
 
-## License
+OpenSSF Scorecard runs on `main` (see badge workflows in upstream; adjust if you fork the repo).
+
+## Upstream and license
+
+Derived from [Saku0512/VulnDock](https://github.com/Saku0512/VulnDock) (MIT). Desktop installers, Homebrew, and WinGet flows in upstream **do not apply** to this fork unless you reintroduce them.
 
 See [LICENSE](LICENSE).

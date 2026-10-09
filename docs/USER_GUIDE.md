@@ -1,5 +1,30 @@
 # VulnDock User Guide
 
+> **VulnDockCustomized (this fork)** is a **self-hosted web app** (Go + Svelte, SQLite).  
+> Operations: [WEB_SELF_HOST.md](WEB_SELF_HOST.md). Japanese overview: [README.ja.md](README.ja.md).  
+> The sections below about `~/.config/VulnDock/reports.json` describe the **upstream desktop app**.
+
+## VulnDockCustomized (web) workflow
+
+1. Open the app in your browser and complete **initial setup** (admin password; setup token unless `VULNDOCK_TRUST_LOOPBACK_SETUP=true` on loopback).
+2. **Create a report** with program, asset, CVSS, status, tags, memo, and conversation logs.
+3. Attach **PoC files** (stored as BLOBs in SQLite, max 50MB each).
+4. **Save** — data lives under `VULNDOCK_DATA_DIR` (default `~/.local/share/vulndock-customized`).
+5. **Delete** moves a report to the **trash** (sidebar). Restore from trash within **5 days**, after which reports are purged automatically.
+6. **Encrypted ZIP** export/restore uses the same format as the desktop app (`/api/backup/*` or UI buttons).
+
+Authenticated **server info** (data directory path, DB size) is available at `GET /api/server/info`. Public health is `GET /api/health` (`ok`, `version` only).
+
+### Migrate from desktop
+
+```sh
+./build/bin/vulndock-customized migrate --from-json ~/.config/VulnDock/reports.json
+```
+
+---
+
+## Upstream desktop app
+
 VulnDock is a local desktop application for organizing vulnerability report metadata, PoC attachments, and CVSS vectors. It is intended for tracking reports during vulnerability research or coordinated disclosure work.
 
 ## Main Workflow

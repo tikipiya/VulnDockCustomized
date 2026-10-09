@@ -1,8 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
-  import { CreateEncryptedBackup, DeleteReport, ListReports, OpenPocFile, RestoreEncryptedBackup, SaveReport, StorePath } from '../wailsjs/go/main/App.js'
-  import { main } from '../wailsjs/go/models'
+  import {
+    attachmentURL,
+    createEncryptedBackup,
+    deleteReport,
+    fetchServerInfo,
+    listReports,
+    listTrashReports,
+    restoreReportFromTrash,
+    restoreEncryptedBackup,
+    saveReport,
+  } from './api/client'
   import { selectedBackupFile, validateBackupPasswordPair, validateRestorePassword } from './backup'
   import { calculateCvss, inferCvssVersion } from './cvss'
   import logoUrl from './assets/images/logo.png'
@@ -125,6 +133,9 @@
   let pocInput = $state<HTMLInputElement>()
   let backupInput = $state<HTMLInputElement>()
   let backupDialog = $state<BackupDialog | null>(null)
+  let trashOpen = $state(false)
+  let trashReports = $state<Report[]>([])
+  let trashLoading = $state(false)
 
   let filteredReports = $derived(reports.filter(matchesFilters))
   let selectedReport = $derived(reports.find((report) => report.id === selectedId))
@@ -193,8 +204,9 @@
     errorMessage = ''
 
     try {
-      reports = (await ListReports()).map(normalizeReport)
-      storePath = await StorePath()
+      reports = (await listReports()).map(normalizeReport)
+      const info = await fetchServerInfo()
+      storePath = info.dataDir
       if (reports.length > 0) {
         selectReport(reports[0], { force: true, skipUnsavedCheck: true })
       } else {
@@ -247,9 +259,9 @@
       memo: report.memo,
       reportUrl: report.reportUrl,
       maintainerLog: report.maintainerLog,
-      conversationLogs: report.conversationLogs.map((log) => ({ ...log })),
-      tags: report.tags,
-      pocFiles: report.pocFiles
+      conversationLogs: (report.conversationLogs ?? []).map((log) => ({ ...log })),
+      tags: report.tags ?? [],
+      pocFiles: report.pocFiles ?? []
     }
     conversationDraft = emptyConversationDraft()
     editingConversationLog = null
@@ -262,9 +274,8 @@
 
     try {
       const preparedDraft = draftForSave()
-      const saved = normalizeReport(await SaveReport(new main.ReportDraft({
-        ...preparedDraft
-      })))
+      const isNew = !preparedDraft.id
+      const saved = normalizeReport(await saveReport(preparedDraft, isNew, preparedDraft.id))
       const index = reports.findIndex((report) => report.id === saved.id)
       if (index >= 0) {
         reports = reports.map((report) => report.id === saved.id ? saved : report)
@@ -291,19 +302,57 @@
     }
 
     try {
-      await DeleteReport(selectedId)
+      await deleteReport(selectedId)
       reports = reports.filter((report) => report.id !== selectedId)
       if (reports.length > 0) {
         selectReport(reports[0], { force: true, skipUnsavedCheck: true })
       } else {
         createReport({ skipUnsavedCheck: true })
       }
+      if (trashOpen) {
+        void loadTrash()
+      }
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error)
     }
   }
 
-  function createEncryptedBackup() {
+  async function loadTrash() {
+    trashLoading = true
+    try {
+      trashReports = (await listTrashReports()).map(normalizeReport)
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error)
+    } finally {
+      trashLoading = false
+    }
+  }
+
+  async function toggleTrashPanel() {
+    trashOpen = !trashOpen
+    if (trashOpen) {
+      await loadTrash()
+    }
+  }
+
+  async function restoreFromTrash(id: string) {
+    if (!confirm('この報告をゴミ箱から復元しますか？')) {
+      return
+    }
+    try {
+      await restoreReportFromTrash(id)
+      await loadTrash()
+      reports = (await listReports()).map(normalizeReport)
+      const restored = reports.find((report) => report.id === id)
+      if (restored) {
+        selectReport(restored, { force: true, skipUnsavedCheck: true })
+      }
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  function openEncryptedBackupExport() {
     backupDialog = {
       mode: 'export',
       file: null,
@@ -336,11 +385,11 @@
     errorMessage = ''
     try {
       if (dialog.mode === 'export') {
-        const backup = await CreateEncryptedBackup(passwordResult.password)
+        const backup = await createEncryptedBackup(passwordResult.password)
         downloadBase64File(backup.data, backup.fileName, 'application/zip')
       } else {
         const archiveData = await readFileAsDataURL(dialog.file as File)
-        reports = (await RestoreEncryptedBackup(archiveData, passwordResult.password)).map(normalizeReport)
+        reports = (await restoreEncryptedBackup(archiveData, passwordResult.password)).map(normalizeReport)
         if (reports.length > 0) {
           selectReport(reports[0], { force: true, skipUnsavedCheck: true })
         } else {
@@ -369,7 +418,7 @@
     backupInput?.click()
   }
 
-  async function restoreEncryptedBackup(files: FileList | null) {
+  async function openRestoreBackupDialog(files: FileList | null) {
     const file = selectedBackupFile(files)
     if (!file) {
       return
@@ -440,7 +489,7 @@
   }
 
   function conversationLogsForSave() {
-    const logs = draft.conversationLogs.map((log) => ({ ...log }))
+    const logs = (draft.conversationLogs ?? []).map((log) => ({ ...log }))
     const pendingLog = pendingConversationLog()
     return pendingLog ? [...logs, pendingLog] : logs
   }
@@ -475,8 +524,8 @@
     return {
       ...draft,
       conversationLogs: pendingLog
-        ? [...draft.conversationLogs, pendingLog]
-        : draft.conversationLogs,
+        ? [...(draft.conversationLogs ?? []), pendingLog]
+        : (draft.conversationLogs ?? []),
       tags: tagsFromText(tagsText)
     }
   }
@@ -517,7 +566,7 @@
       memo: source.memo.trim(),
       reportUrl: source.reportUrl.trim(),
       maintainerLog: '',
-      conversationLogs: source.conversationLogs
+      conversationLogs: (Array.isArray(source.conversationLogs) ? source.conversationLogs : [])
         .map((log) => ({
           id: log.id,
           from: normalizeParticipant(log.from, '自分'),
@@ -526,8 +575,8 @@
           body: log.body.trim()
         }))
         .filter((log) => log.body),
-      tags: normalizeTags(source.tags),
-      pocFiles: source.pocFiles.map((file) => ({
+      tags: normalizeTags(Array.isArray(source.tags) ? source.tags : []),
+      pocFiles: (Array.isArray(source.pocFiles) ? source.pocFiles : []).map((file) => ({
         id: file.id.trim(),
         name: file.name.trim(),
         type: file.type.trim(),
@@ -886,12 +935,14 @@
 
     try {
       if (file.data) {
-        BrowserOpenURL(file.data)
+        window.open(file.data, '_blank', 'noopener,noreferrer')
         return
       }
 
-      const url = await OpenPocFile(new main.PocFile({ ...file }))
-      BrowserOpenURL(url)
+      if (!selectedId || !file.id) {
+        throw new Error('添付ファイルを開けません')
+      }
+      window.open(attachmentURL(selectedId, file.id), '_blank', 'noopener,noreferrer')
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error)
     }
@@ -981,7 +1032,7 @@
     if (!url) {
       return
     }
-    BrowserOpenURL(url)
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   function formatFileSize(size: number) {
@@ -1158,6 +1209,27 @@
     </div>
 
     <div class="filter-panel">
+      <button class="ghost-button trash-toggle" type="button" onclick={() => void toggleTrashPanel()}>
+        {trashOpen ? 'ゴミ箱を閉じる' : 'ゴミ箱'}
+      </button>
+      {#if trashOpen}
+        <div class="trash-panel" aria-label="ゴミ箱">
+          {#if trashLoading}
+            <p class="muted">読み込み中…</p>
+          {:else if trashReports.length === 0}
+            <p class="muted">ゴミ箱は空です（{5}日で完全削除）</p>
+          {:else}
+            {#each trashReports as item (item.id)}
+              <div class="trash-row">
+                <span>{item.title || 'Untitled report'}</span>
+                <button class="small-button" type="button" onclick={() => void restoreFromTrash(item.id)}>
+                  復元
+                </button>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
       <input bind:value={search} placeholder="検索" type="search" aria-label="検索" />
       <select bind:value={statusFilter} aria-label="ステータス">
         <option value="All">すべての状態</option>
@@ -1221,7 +1293,7 @@
         <span class:dirty={hasUnsavedChanges} class="save-status">
           {saving ? '保存中...' : hasUnsavedChanges ? '未保存の変更' : '保存済み'}
         </span>
-        <button class="ghost-button" type="button" onclick={createEncryptedBackup} disabled={backupBusy}>
+        <button class="ghost-button" type="button" onclick={openEncryptedBackupExport} disabled={backupBusy}>
           {backupBusy ? '処理中...' : '暗号化ZIP'}
         </button>
         <button class="ghost-button" type="button" onclick={chooseBackupForRestore} disabled={backupBusy}>復元</button>
@@ -1230,7 +1302,7 @@
           class="hidden-file-input"
           type="file"
           accept=".zip,application/zip"
-          onchange={(event) => restoreEncryptedBackup(event.currentTarget.files)}
+          onchange={(event) => openRestoreBackupDialog(event.currentTarget.files)}
         />
         <button class="ghost-button" type="button" onclick={deleteCurrentReport} disabled={!selectedId}>削除</button>
         <button class="primary-button" type="button" onclick={saveCurrentReport} disabled={saving}>

@@ -1,0 +1,17 @@
+FROM ubuntu:24.04@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/vulndock-customized
+
+COPY vulndock-customized /usr/local/bin/vulndock-customized
+
+ENV VULNDOCK_BIND=0.0.0.0:8080
+ENV VULNDOCK_DATA_DIR=/data
+
+EXPOSE 8080
+VOLUME ["/data"]
+
+ENTRYPOINT ["/usr/local/bin/vulndock-customized"]
