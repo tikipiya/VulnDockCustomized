@@ -289,14 +289,27 @@ func (s *Store) upsertPocBlob(ctx context.Context, exec interface {
 	if legacyPath == "" {
 		legacyPath = domain.LegacyDisplayPath(id, file.Name)
 	}
-	_, err := exec.ExecContext(ctx, `
-		INSERT INTO poc_files(id, report_id, name, content_type, size, content, legacy_path)
-		VALUES (?,?,?,?,?,?,?)
-		ON CONFLICT(id) DO UPDATE SET
-			name=excluded.name, content_type=excluded.content_type, size=excluded.size,
-			content=excluded.content, legacy_path=excluded.legacy_path
-	`, id, reportID, file.Name, file.Type, int64(len(content)), content, legacyPath)
-	return err
+	var existingReport string
+	err := s.db.QueryRowContext(ctx, `SELECT report_id FROM poc_files WHERE id = ?`, id).Scan(&existingReport)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		_, err = exec.ExecContext(ctx, `
+			INSERT INTO poc_files(id, report_id, name, content_type, size, content, legacy_path)
+			VALUES (?,?,?,?,?,?,?)
+		`, id, reportID, file.Name, file.Type, int64(len(content)), content, legacyPath)
+		return err
+	case err != nil:
+		return err
+	case existingReport != reportID:
+		return fmt.Errorf("attachment belongs to another report")
+	default:
+		_, err = exec.ExecContext(ctx, `
+			UPDATE poc_files SET
+				name=?, content_type=?, size=?, content=?, legacy_path=?
+			WHERE id=? AND report_id=?
+		`, file.Name, file.Type, int64(len(content)), content, legacyPath, id, reportID)
+		return err
+	}
 }
 
 func (s *Store) PocContent(ctx context.Context, reportID, fileID string) ([]byte, string, string, error) {
