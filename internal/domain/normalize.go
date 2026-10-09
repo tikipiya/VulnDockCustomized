@@ -371,7 +371,11 @@ func SortReports(reports []Report) {
 }
 
 func NewReportID() string {
-	return "report_" + time.Now().UTC().Format("20060102150405.000000000")
+	suffix, err := RandomHex(16)
+	if err != nil {
+		return "report_" + time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return "report_" + suffix
 }
 
 func newConversationEntryID(index int) string {
@@ -379,11 +383,11 @@ func newConversationEntryID(index int) string {
 }
 
 func NewAttachmentID() string {
-	suffix, err := RandomHex(4)
-	if err == nil {
-		return "attachment_" + time.Now().UTC().Format("20060102150405.000000000") + "_" + suffix
+	suffix, err := RandomHex(16)
+	if err != nil {
+		return "attachment_" + time.Now().UTC().Format("20060102150405.000000000")
 	}
-	return "attachment_" + time.Now().UTC().Format("20060102150405.000000000")
+	return "attachment_" + suffix
 }
 
 func NormalizeAttachmentID(id string) string {
@@ -415,7 +419,7 @@ func SanitizeAttachmentName(name string) string {
 		switch {
 		case value < 32 || value == 127:
 			builder.WriteRune('_')
-		case value == '/' || value == '\\':
+		case value == '"', value == '\\', value == '/':
 			builder.WriteRune('_')
 		default:
 			builder.WriteRune(value)
