@@ -21,15 +21,15 @@ import (
 )
 
 const (
-	Format               = "vulndock.encrypted-backup.v1"
-	ManifestName         = "vulndock-backup.json"
-	PayloadName          = "payload.bin"
-	Algorithm            = "AES-256-GCM"
-	KDF                  = "argon2id"
-	KDFTime              = uint32(3)
-	KDFMemory            = uint32(64 * 1024)
-	KDFThreads           = uint8(4)
-	KDFKeyLen            = uint32(32)
+	Format            = "vulndock.encrypted-backup.v1"
+	ManifestName      = "vulndock-backup.json"
+	PayloadName       = "payload.bin"
+	Algorithm         = "AES-256-GCM"
+	KDF               = "argon2id"
+	KDFTime           = uint32(3)
+	KDFMemory         = uint32(64 * 1024)
+	KDFThreads        = uint8(4)
+	KDFKeyLen         = uint32(32)
 	MaxEncryptedBytes = 256 * 1024 * 1024
 )
 

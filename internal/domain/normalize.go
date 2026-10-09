@@ -29,7 +29,6 @@ func RandomHex(size int) (string, error) {
 	return hex.EncodeToString(data), nil
 }
 
-
 func DecodeDataURL(data string) (string, []byte, error) {
 	data = strings.TrimSpace(data)
 	if data == "" {
@@ -67,7 +66,6 @@ func DecodeDataURL(data string) (string, []byte, error) {
 	}
 	return contentType, content, nil
 }
-
 
 func NormalizeDraft(draft ReportDraft) Report {
 	conversationLogs := normalizeConversationLogs(draft.ConversationLogs, draft.MaintainerLog)
@@ -430,4 +428,3 @@ func SanitizeAttachmentName(name string) string {
 	}
 	return name
 }
-
