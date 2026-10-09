@@ -271,13 +271,16 @@ func (s *Store) syncPocFiles(ctx context.Context, tx *sql.Tx, report domain.Repo
 	return nil
 }
 
+type sqlExecutor interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+}
+
 func (s *Store) UpsertPocBlob(ctx context.Context, reportID string, file domain.PocFile, content []byte) error {
 	return s.upsertPocBlob(ctx, s.db, reportID, file, content)
 }
 
-func (s *Store) upsertPocBlob(ctx context.Context, exec interface {
-	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
-}, reportID string, file domain.PocFile, content []byte) error {
+func (s *Store) upsertPocBlob(ctx context.Context, exec sqlExecutor, reportID string, file domain.PocFile, content []byte) error {
 	if len(content) > domain.MaxPocFileBytes {
 		return fmt.Errorf("attachment exceeds %d byte limit", domain.MaxPocFileBytes)
 	}
@@ -290,7 +293,7 @@ func (s *Store) upsertPocBlob(ctx context.Context, exec interface {
 		legacyPath = domain.LegacyDisplayPath(id, file.Name)
 	}
 	var existingReport string
-	err := s.db.QueryRowContext(ctx, `SELECT report_id FROM poc_files WHERE id = ?`, id).Scan(&existingReport)
+	err := exec.QueryRowContext(ctx, `SELECT report_id FROM poc_files WHERE id = ?`, id).Scan(&existingReport)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		_, err = exec.ExecContext(ctx, `
