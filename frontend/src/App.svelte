@@ -1035,7 +1035,18 @@
     if (!url) {
       return
     }
-    window.open(url, '_blank', 'noopener,noreferrer')
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      errorMessage = '報告 URL の形式が正しくありません'
+      return
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      errorMessage = 'http または https の URL のみ開けます'
+      return
+    }
+    window.open(parsed.href, '_blank', 'noopener,noreferrer')
   }
 
   function formatFileSize(size: number) {
