@@ -15,6 +15,7 @@
   import { calculateCvss, inferCvssVersion } from './cvss'
   import logoUrl from './assets/images/logo.png'
   import PromptShelf from './PromptShelf.svelte'
+  import { openDataUrlPreview } from './pocPreview'
   import SveltyPicker from 'svelty-picker'
   import { jp } from 'svelty-picker/i18n'
 
@@ -938,7 +939,7 @@
 
     try {
       if (file.data) {
-        window.open(file.data, '_blank', 'noopener,noreferrer')
+        openDataUrlPreview(file.data)
         return
       }
 

@@ -31,6 +31,7 @@ func TestSetupRequiresTokenByDefault(t *testing.T) {
 		"secret-setup-token",
 		false,
 		false,
+		false,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/setup", bytes.NewBufferString(`{"password":"password123"}`))
@@ -70,7 +71,7 @@ func TestAuthStatusReturnsCSRFWhenAuthenticated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := New(authSvc, &service.Reports{Store: store}, nil, nil, nil, dir, "tok", false, false)
+	srv := New(authSvc, &service.Reports{Store: store}, nil, nil, nil, dir, "tok", false, false, false)
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sid, Expires: exp})
 	rec := httptest.NewRecorder()
@@ -98,7 +99,7 @@ func TestHealthDoesNotExposeDataDir(t *testing.T) {
 	}
 	defer store.Close()
 
-	srv := New(&auth.Service{Store: store}, &service.Reports{Store: store}, nil, nil, nil, filepath.Join(dir, "data"), "tok", false, false)
+	srv := New(&auth.Service{Store: store}, &service.Reports{Store: store}, nil, nil, nil, filepath.Join(dir, "data"), "tok", false, false, false)
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)

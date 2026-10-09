@@ -75,22 +75,32 @@ func runServer() {
 	authSvc := &auth.Service{Store: store}
 	setupToken := strings.TrimSpace(os.Getenv("VULNDOCK_SETUP_TOKEN"))
 	if setupToken == "" {
-		generated, err := auth.RandomHex(16)
+		tokenPath := filepath.Join(dataDir, ".setup-token")
+		needsSetup, err := authSvc.NeedsSetup(context.Background())
 		if err != nil {
 			log.Fatal(err)
 		}
-		setupToken = generated
-		tokenPath := filepath.Join(dataDir, ".setup-token")
-		if err := os.WriteFile(tokenPath, []byte(setupToken+"\n"), 0o600); err != nil {
-			log.Printf("VULNDOCK_SETUP_TOKEN is unset and could not write %s: %v", tokenPath, err)
-		} else {
-			log.Printf("VULNDOCK_SETUP_TOKEN is unset; set the env var or read the token from %s (mode 0600) for remote setup", tokenPath)
+		if data, err := os.ReadFile(tokenPath); err == nil {
+			setupToken = strings.TrimSpace(string(data))
+		}
+		if setupToken == "" && needsSetup {
+			generated, err := auth.RandomHex(16)
+			if err != nil {
+				log.Fatal(err)
+			}
+			setupToken = generated
+			if err := os.WriteFile(tokenPath, []byte(setupToken+"\n"), 0o600); err != nil {
+				log.Printf("VULNDOCK_SETUP_TOKEN is unset and could not write %s: %v", tokenPath, err)
+			} else {
+				log.Printf("VULNDOCK_SETUP_TOKEN is unset; set the env var or read the token from %s (mode 0600) for remote setup", tokenPath)
+			}
 		}
 	}
 
 	srv := httpapi.New(
 		authSvc, reports, prompts, backupSvc, staticHandler, dataDir, setupToken,
 		envBool("VULNDOCK_TRUST_LOOPBACK_SETUP", false),
+		envBool("VULNDOCK_TRUST_PROXY_IP", false),
 		envBool("VULNDOCK_SECURE_COOKIES", false),
 	)
 	ctx, cancel := context.WithCancel(context.Background())

@@ -96,6 +96,7 @@ Produces:
 | `VULNDOCK_STATIC_DIR` | `frontend/dist` if present | Path to built SPA |
 | `VULNDOCK_SETUP_TOKEN` | (auto-generated, written to `.setup-token` in data dir) | First-time setup (required unless direct loopback trust is enabled) |
 | `VULNDOCK_TRUST_LOOPBACK_SETUP` | `false` | If `true`, skip setup token for **direct** loopback clients without proxy headers (dev only) |
+| `VULNDOCK_TRUST_PROXY_IP` | `false` | If `true`, use `X-Real-IP` / `X-Forwarded-For` for login rate limits (enable only behind a trusted reverse proxy) |
 | `VULNDOCK_SECURE_COOKIES` | `false` | Set `true` when the app is served only over HTTPS (session cookie `Secure` flag) |
 
 First-time setup always requires the setup token unless you set `VULNDOCK_TRUST_LOOPBACK_SETUP=true` **and** connect directly to loopback (no `X-Forwarded-For` / `Forwarded` headers—reverse proxies always need the token).

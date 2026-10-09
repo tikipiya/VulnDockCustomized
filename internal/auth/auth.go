@@ -18,7 +18,8 @@ const (
 	SettingPasswordHash = "password_hash"
 	SettingSetupDone    = "setup_completed_at"
 	SessionCookieName   = "vdc_session"
-	SessionDuration     = 72 * time.Hour
+	SessionDuration       = 72 * time.Hour
+	sessionRefreshWindow  = 24 * time.Hour
 )
 
 type Service struct {
@@ -102,6 +103,9 @@ func (s *Service) ValidateSession(ctx context.Context, sessionID string) (csrf s
 	if err != nil || time.Now().After(expires) {
 		_ = s.Store.DeleteSession(ctx, sessionID)
 		return "", time.Time{}, errors.New("unauthorized")
+	}
+	if time.Until(expires) > sessionRefreshWindow {
+		return csrfToken, expires, nil
 	}
 	newExpires := time.Now().Add(SessionDuration)
 	now := time.Now().UTC().Format(time.RFC3339)

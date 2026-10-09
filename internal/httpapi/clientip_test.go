@@ -18,6 +18,18 @@ func TestAllowInitialSetupRejectsLoopbackTrustBehindProxy(t *testing.T) {
 	}
 }
 
+func TestClientIPForRateLimitTrustsProxyWhenEnabled(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Real-IP", "203.0.113.9")
+	if clientIPForRateLimit(req, false) != "127.0.0.1" {
+		t.Fatal("expected direct client IP")
+	}
+	if clientIPForRateLimit(req, true) != "203.0.113.9" {
+		t.Fatal("expected forwarded client IP for rate limit")
+	}
+}
+
 func TestAllowInitialSetupLoopbackTrustDirect(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/setup", nil)
 	req.RemoteAddr = "127.0.0.1:12345"

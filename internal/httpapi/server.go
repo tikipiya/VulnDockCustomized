@@ -29,6 +29,7 @@ type Server struct {
 	DataDir            string
 	SetupToken         string
 	TrustLoopbackSetup bool
+	TrustProxyIP       bool
 	SecureCookies      bool
 	loginLim           *loginLimiter
 	backupLim          *loginLimiter
@@ -83,7 +84,7 @@ func (l *loginLimiter) allow(ip string) bool {
 	return lim.Allow()
 }
 
-func New(authSvc *auth.Service, reports *service.Reports, prompts *service.Prompts, backupSvc *service.Backup, static http.Handler, dataDir string, setupToken string, trustLoopbackSetup bool, secureCookies bool) *Server {
+func New(authSvc *auth.Service, reports *service.Reports, prompts *service.Prompts, backupSvc *service.Backup, static http.Handler, dataDir string, setupToken string, trustLoopbackSetup bool, trustProxyIP bool, secureCookies bool) *Server {
 	return &Server{
 		Auth:               authSvc,
 		Reports:            reports,
@@ -93,6 +94,7 @@ func New(authSvc *auth.Service, reports *service.Reports, prompts *service.Promp
 		DataDir:            dataDir,
 		SetupToken:         setupToken,
 		TrustLoopbackSetup: trustLoopbackSetup,
+		TrustProxyIP:       trustProxyIP,
 		SecureCookies:      secureCookies,
 		loginLim:           newLoginLimiter(),
 		backupLim:          newBackupLimiter(),
@@ -116,6 +118,10 @@ func (s *Server) Handler() http.Handler {
 	s.registerPromptRoutes(mux)
 	mux.Handle("/", s.spaFallback())
 	return withSecurityHeaders(mux)
+}
+
+func (s *Server) rateLimitClientIP(r *http.Request) string {
+	return clientIPForRateLimit(r, s.TrustProxyIP)
 }
 
 func withSecurityHeaders(next http.Handler) http.Handler {
@@ -181,7 +187,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	if !s.authStatusLim.allow(clientIP(r)) {
+	if !s.authStatusLim.allow(s.rateLimitClientIP(r)) {
 		writeError(w, http.StatusTooManyRequests, errors.New("too many requests"))
 		return
 	}
@@ -201,7 +207,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	setupTokenRequired := false
 	if needs {
-		setupTokenRequired = !s.TrustLoopbackSetup || !isLoopbackIP(clientIP(r))
+		setupTokenRequired = !s.TrustLoopbackSetup || !isLoopbackIP(directClientIP(r))
 	}
 	payload := map[string]interface{}{
 		"needsSetup":         needs,
@@ -219,7 +225,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	ip := clientIP(r)
+	ip := s.rateLimitClientIP(r)
 	if !s.loginLim.allow(ip) {
 		writeError(w, http.StatusTooManyRequests, errors.New("too many setup attempts"))
 		return
@@ -258,7 +264,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	ip := clientIP(r)
+	ip := s.rateLimitClientIP(r)
 	if !s.loginLim.allow(ip) {
 		writeError(w, http.StatusTooManyRequests, errors.New("too many login attempts"))
 		return
@@ -297,7 +303,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	ip := clientIP(r)
+	ip := s.rateLimitClientIP(r)
 	if !s.loginLim.allow(ip) {
 		writeError(w, http.StatusTooManyRequests, errors.New("too many password change attempts"))
 		return

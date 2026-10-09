@@ -82,6 +82,7 @@ func newTestServer(store *sqlite.Store) *Server {
 		"setup-token",
 		true,
 		false,
+		false,
 	)
 }
 

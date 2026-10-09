@@ -22,7 +22,7 @@ func (s *Server) handleBackupExport(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	if !s.backupLim.allow(clientIP(r)) {
+	if !s.backupLim.allow(s.rateLimitClientIP(r)) {
 		writeError(w, http.StatusTooManyRequests, errors.New("too many backup requests"))
 		return
 	}
@@ -53,7 +53,7 @@ func (s *Server) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	if !s.backupLim.allow(clientIP(r)) {
+	if !s.backupLim.allow(s.rateLimitClientIP(r)) {
 		writeError(w, http.StatusTooManyRequests, errors.New("too many backup requests"))
 		return
 	}
