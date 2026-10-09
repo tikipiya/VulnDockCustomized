@@ -1,55 +1,78 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Security fixes are handled on the `main` branch. If release artifacts or versioned builds are introduced later, this policy should be updated with a supported-version table.
+| Version | Supported |
+|---------|-----------|
+| `main`  | Yes |
+| Latest release tag (e.g. `v1.1.0`) | Yes, same fixes as `main` when applicable |
+| Older tags | Best effort only |
 
-## Reporting a Vulnerability
+Security fixes land on `main` first, then release tags as needed.
 
-Please do not open a public issue for a suspected security vulnerability.
+## Reporting a vulnerability
 
-Use GitHub's private vulnerability reporting or Security Advisory flow when available. If that is not available, contact the maintainer through a private channel before sharing details publicly.
+**Do not** open a public GitHub issue for a suspected security vulnerability.
 
-Report privately via:
-https://github.com/Saku0512/VulnDock/security/advisories/new
+Report privately to this fork:
 
-When reporting, include:
+**https://github.com/tikipiya/VulnDockCustomized/security/advisories/new**
 
-- A clear description of the issue.
-- Steps to reproduce.
-- Impact and affected components.
-- Relevant CVSS vector, if known.
-- Minimal PoC material needed to verify the issue.
+If GitHub private reporting is unavailable, contact the maintainer through another private channel before disclosing details publicly.
 
-Avoid sending real credentials, customer data, private keys, production tokens, or unnecessary sensitive data.
+Include:
 
-## Handling Expectations
+- Clear description and impact (who can exploit it, what data or access is at risk).
+- Steps to reproduce on **VulnDockCustomized** (version or commit, OS, deployment: binary, Docker, reverse proxy).
+- Affected routes or components (e.g. `/api/auth/setup`, backup restore).
+- CVSS vector if you have one.
+- Minimal proof-of-concept; do **not** attach real customer data, live exploits against third parties, or unrelated secrets.
 
-The maintainer will try to:
+### Upstream overlap
 
-- Acknowledge the report after it is received.
-- Confirm whether the issue is reproducible.
-- Coordinate a fix before public disclosure when appropriate.
-- Credit reporters when requested and practical.
+This project is derived from [Saku0512/VulnDock](https://github.com/Saku0512/VulnDock) (MIT). Issues that apply only to the **desktop Wails app** or upstream installers should be reported to upstream. Issues in **shared formats** (e.g. encrypted backup ZIP `vulndock.encrypted-backup.v1`) may affect both; you may report to either project or both—please say so in the report.
 
-This project is maintained on a best-effort basis, so response times may vary.
+## Handling expectations
 
-## Security Notes for Users
+Maintainers will try to:
 
-VulnDock stores report data locally in:
+- Acknowledge receipt in a reasonable time (best effort).
+- Confirm reproducibility.
+- Ship a fix before broad public disclosure when appropriate.
+- Credit reporters on request when practical.
 
-```text
-~/.config/VulnDock/reports.json
-```
+This is a volunteer / best-effort project; response times are not guaranteed.
 
-PoC attachment metadata is stored in `reports.json`. Attachment contents are stored separately under:
+## Security notes for operators
 
-```text
-~/.config/VulnDock/attachments/
-```
+VulnDockCustomized is a **single-user, self-hosted** web application. You are responsible for network exposure and host security.
 
-Treat both locations as sensitive. Do not store secrets, production credentials, private customer data, or exploit material that you are not allowed to keep locally.
+### Data at rest
 
-Encrypted backup ZIP files protect report data and attachment contents with AES-256-GCM. The backup password is required to authenticate and restore the payload; lost passwords cannot be recovered by VulnDock.
+- SQLite database and sessions: default directory `~/.local/share/vulndock-customized/` (override with `VULNDOCK_DATA_DIR`).
+- Permissions: data directory `0700`, database file `0600` when created by the server.
+- Content includes report text, **PoC BLOBs**, password hashes, and session identifiers. Treat the data directory as **highly sensitive**.
 
-If you share bug reports, screenshots, exported data, or repository issues, review them for sensitive vulnerability details first.
+### Network and authentication
+
+- Default bind is `0.0.0.0:8080`. Restrict with firewall, Tailscale, or bind to `127.0.0.1` when appropriate.
+- **Initial setup** requires `VULNDOCK_SETUP_TOKEN` (or the token printed at startup) unless `VULNDOCK_TRUST_LOOPBACK_SETUP=true` and the server sees a loopback client. Do **not** expose an uninitialized instance to the internet.
+- Behind nginx/Caddy, do not rely on loopback trust; always set a strong setup token and use HTTPS with `VULNDOCK_SECURE_COOKIES=true`.
+- Session cookies are HttpOnly, SameSite=Lax; mutating API calls require CSRF. There is no multi-tenant isolation—anyone who can authenticate is the sole administrator.
+
+### Backups
+
+- Encrypted ZIP backups use Argon2id + AES-256-GCM (desktop-compatible payload). Protect backup files and passwords; lost passwords cannot be recovered.
+- Restore **replaces** all reports and saved prompts in the database. Test restores on a copy before using production data.
+
+### What not to put in reports to us
+
+When filing **security advisories** or support issues, redact:
+
+- Your production `VULNDOCK_SETUP_TOKEN`, session cookies, and admin passwords.
+- Full PoC exploit code against real targets unless required for reproduction.
+- Third-party credentials or personal data from real programs.
+
+## Secure development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run `make check` before submitting changes that touch auth, backup, or storage.
