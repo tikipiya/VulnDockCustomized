@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -14,18 +15,40 @@ type Prompts struct {
 }
 
 func (s *Prompts) List(ctx context.Context) ([]domain.SavedPrompt, error) {
-	return s.Store.ListSavedPrompts(ctx)
+	prompts, err := s.Store.ListSavedPrompts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return domain.EnsureSavedPromptsList(prompts), nil
 }
 
-func (s *Prompts) Save(ctx context.Context, draft domain.SavedPromptDraft) (domain.SavedPrompt, error) {
+func (s *Prompts) Create(ctx context.Context, draft domain.SavedPromptDraft) (domain.SavedPrompt, error) {
+	draft.ID = ""
+	return s.save(ctx, draft, false)
+}
+
+func (s *Prompts) Update(ctx context.Context, id string, draft domain.SavedPromptDraft) (domain.SavedPrompt, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return domain.SavedPrompt{}, errPromptIDRequired
+	}
+	draft.ID = id
+	return s.save(ctx, draft, true)
+}
+
+func (s *Prompts) save(ctx context.Context, draft domain.SavedPromptDraft, requireExisting bool) (domain.SavedPrompt, error) {
+	if err := domain.ValidateSavedPromptBody(draft.Body); err != nil {
+		return domain.SavedPrompt{}, err
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	prompt := domain.NormalizeSavedPrompt(draft, now)
 
-	if strings.TrimSpace(draft.ID) != "" {
-		existing, err := s.Store.GetSavedPrompt(ctx, draft.ID)
-		if err == nil {
-			prompt.CreatedAt = existing.CreatedAt
+	if requireExisting {
+		existing, err := s.Store.GetSavedPrompt(ctx, prompt.ID)
+		if err != nil {
+			return domain.SavedPrompt{}, errors.New("prompt not found")
 		}
+		prompt.CreatedAt = existing.CreatedAt
 	}
 
 	if err := s.Store.SaveSavedPrompt(ctx, prompt); err != nil {

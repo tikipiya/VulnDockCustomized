@@ -27,6 +27,9 @@ func (s *Store) ListSavedPrompts(ctx context.Context) ([]domain.SavedPrompt, err
 		}
 		prompts = append(prompts, p)
 	}
+	if prompts == nil {
+		return []domain.SavedPrompt{}, nil
+	}
 	return prompts, rows.Err()
 }
 

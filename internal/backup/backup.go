@@ -242,15 +242,7 @@ func NormalizePayload(payload Payload) (ImportResult, error) {
 }
 
 func validateBackupPrompts(prompts []domain.SavedPrompt) error {
-	for _, prompt := range prompts {
-		if strings.TrimSpace(prompt.ID) == "" {
-			return errors.New("backup prompt id is required")
-		}
-		if len(prompt.Body) > domain.MaxSavedPromptBytes {
-			return fmt.Errorf("backup prompt %q exceeds size limit", prompt.Title)
-		}
-	}
-	return nil
+	return domain.ValidateRestoredPrompts(prompts)
 }
 
 func validateReportAttachmentPaths(reports []domain.Report) error {

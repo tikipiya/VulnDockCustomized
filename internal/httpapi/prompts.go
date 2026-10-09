@@ -32,7 +32,7 @@ func (s *Server) handlePrompts(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		prompt, err := s.Prompts.Save(r.Context(), draft)
+		prompt, err := s.Prompts.Create(r.Context(), draft)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
@@ -60,8 +60,7 @@ func (s *Server) handlePromptSubroutes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		draft.ID = id
-		prompt, err := s.Prompts.Save(r.Context(), draft)
+		prompt, err := s.Prompts.Update(r.Context(), id, draft)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return

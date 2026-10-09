@@ -60,10 +60,11 @@ func (s *Backup) Restore(ctx context.Context, archive []byte, password string) (
 	if err := validateRestoreAttachments(reports, attachments); err != nil {
 		return nil, err
 	}
-	if err := validateRestorePrompts(imported.Prompts); err != nil {
+	prompts, err := normalizeRestorePrompts(imported.Prompts)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.Store.RestoreFromBackup(ctx, reports, attachments, imported.Prompts); err != nil {
+	if err := s.Store.RestoreFromBackup(ctx, reports, attachments, prompts); err != nil {
 		return nil, err
 	}
 	return s.Store.ListReports(ctx, false)
@@ -87,11 +88,16 @@ func validateRestoreAttachments(reports []domain.Report, attachments map[string]
 	return nil
 }
 
-func validateRestorePrompts(prompts []domain.SavedPrompt) error {
-	for _, prompt := range prompts {
-		if len(prompt.Body) > domain.MaxSavedPromptBytes {
-			return fmt.Errorf("prompt %q exceeds %d byte limit", prompt.Title, domain.MaxSavedPromptBytes)
-		}
+func normalizeRestorePrompts(prompts []domain.SavedPrompt) ([]domain.SavedPrompt, error) {
+	if prompts == nil {
+		return []domain.SavedPrompt{}, nil
 	}
-	return nil
+	normalized := make([]domain.SavedPrompt, 0, len(prompts))
+	for _, prompt := range prompts {
+		normalized = append(normalized, domain.NormalizeRestoredPrompt(prompt))
+	}
+	if err := domain.ValidateRestoredPrompts(normalized); err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
