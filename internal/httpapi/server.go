@@ -165,20 +165,27 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authed := false
+	csrfToken := ""
 	if !needs {
-		if _, _, err := s.sessionFromRequest(r); err == nil {
+		csrf, _, err := s.sessionFromRequest(r)
+		if err == nil {
 			authed = true
+			csrfToken = csrf
 		}
 	}
 	setupTokenRequired := false
 	if needs {
 		setupTokenRequired = !s.TrustLoopbackSetup || !isLoopbackIP(clientIP(r))
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{
+	payload := map[string]interface{}{
 		"needsSetup":         needs,
 		"authenticated":      authed,
 		"setupTokenRequired": setupTokenRequired,
-	})
+	}
+	if authed {
+		payload["csrfToken"] = csrfToken
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {

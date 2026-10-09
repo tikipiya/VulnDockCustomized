@@ -2,6 +2,7 @@ export type AuthStatus = {
   needsSetup: boolean
   authenticated: boolean
   setupTokenRequired?: boolean
+  csrfToken?: string
 }
 
 let csrfToken = ''
@@ -32,7 +33,15 @@ async function parseJSON<T>(response: Response): Promise<T> {
 }
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  return parseJSON(await fetch('/api/auth/status', { credentials: 'include' }))
+  const status = await parseJSON<AuthStatus>(
+    await fetch('/api/auth/status', { credentials: 'include' }),
+  )
+  if (status.authenticated && status.csrfToken) {
+    csrfToken = status.csrfToken
+  } else if (!status.authenticated) {
+    csrfToken = ''
+  }
+  return status
 }
 
 export async function setupAccount(password: string, setupToken?: string): Promise<void> {

@@ -53,6 +53,43 @@ func TestSetupRequiresTokenByDefault(t *testing.T) {
 	}
 }
 
+func TestAuthStatusReturnsCSRFWhenAuthenticated(t *testing.T) {
+	dir := t.TempDir()
+	store, err := sqlite.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	authSvc := &auth.Service{Store: store}
+	if err := authSvc.Setup(t.Context(), "password123"); err != nil {
+		t.Fatal(err)
+	}
+	sid, wantCSRF, exp, err := authSvc.Login(t.Context(), "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := New(authSvc, &service.Reports{Store: store}, nil, nil, nil, dir, "tok", false, false)
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sid, Expires: exp})
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["authenticated"] != true {
+		t.Fatalf("expected authenticated, got %v", payload["authenticated"])
+	}
+	if payload["csrfToken"] != wantCSRF {
+		t.Fatalf("csrfToken mismatch")
+	}
+}
+
 func TestHealthDoesNotExposeDataDir(t *testing.T) {
 	dir := t.TempDir()
 	store, err := sqlite.Open(filepath.Join(dir, "data"))
