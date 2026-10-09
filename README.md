@@ -16,6 +16,7 @@ This fork replaces the original **Wails desktop app** with a **Go HTTP server** 
 - Filter by status, CVSS rating, and next-action windows.
 - **Single-user** access: setup wizard, session cookie (72 h sliding), password change, CSRF on mutating API calls.
 - Import legacy desktop data: `vulndock-customized migrate --from-json`.
+- **Saved prompts**: reusable text templates in the sidebar (copy, edit, included in encrypted backups).
 
 **v1.1.0:** encrypted ZIP backup export/restore (desktop-compatible format) via UI and `/api/backup/*`.
 

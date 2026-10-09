@@ -6,30 +6,65 @@
     type SavedPrompt,
   } from './api/client'
 
+  let {
+    reloadSignal = 0,
+  }: {
+    reloadSignal?: number
+  } = $props()
+
   let open = $state(false)
   let loading = $state(false)
   let copyMessage = $state('')
+  let errorMessage = $state('')
   let prompts = $state<SavedPrompt[]>([])
   let selectedId = $state('')
   let draftTitle = $state('')
   let draftBody = $state('')
   let saving = $state(false)
+  let savedSnapshot = $state({ title: '', body: '' })
 
   let selectedPrompt = $derived(prompts.find((p) => p.id === selectedId))
 
   $effect(() => {
-    if (open && prompts.length === 0 && !loading) {
+    if (reloadSignal > 0) {
       void loadPrompts()
     }
   })
 
+  function syncSnapshot() {
+    savedSnapshot = { title: draftTitle, body: draftBody }
+  }
+
+  function isDirty() {
+    return draftTitle !== savedSnapshot.title || draftBody !== savedSnapshot.body
+  }
+
+  function confirmDiscard() {
+    if (!isDirty()) {
+      return true
+    }
+    return confirm('未保存の変更を破棄しますか？')
+  }
+
   async function loadPrompts() {
     loading = true
+    errorMessage = ''
     try {
       prompts = await listSavedPrompts()
       if (!selectedId && prompts.length > 0) {
-        selectPrompt(prompts[0].id)
+        selectPrompt(prompts[0].id, { skipDiscardCheck: true })
+      } else if (selectedId) {
+        const current = prompts.find((p) => p.id === selectedId)
+        if (current) {
+          selectPrompt(current.id, { skipDiscardCheck: true })
+        } else if (prompts.length > 0) {
+          selectPrompt(prompts[0].id, { skipDiscardCheck: true })
+        } else {
+          startNewPrompt({ skipDiscardCheck: true })
+        }
       }
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'プロンプトの読み込みに失敗しました'
     } finally {
       loading = false
     }
@@ -42,24 +77,33 @@
     }
   }
 
-  function selectPrompt(id: string) {
+  function selectPrompt(id: string, options: { skipDiscardCheck?: boolean } = {}) {
+    if (!options.skipDiscardCheck && !confirmDiscard()) {
+      return
+    }
     selectedId = id
     const item = prompts.find((p) => p.id === id)
     if (item) {
       draftTitle = item.title
       draftBody = item.body
+      syncSnapshot()
     }
   }
 
-  function startNewPrompt() {
+  function startNewPrompt(options: { skipDiscardCheck?: boolean } = {}) {
+    if (!options.skipDiscardCheck && !confirmDiscard()) {
+      return
+    }
     selectedId = ''
     draftTitle = ''
     draftBody = ''
+    syncSnapshot()
   }
 
   async function persistPrompt() {
     saving = true
     copyMessage = ''
+    errorMessage = ''
     try {
       const saved = await saveSavedPrompt({
         id: selectedId || undefined,
@@ -72,7 +116,9 @@
       } else {
         prompts = [saved, ...prompts]
       }
-      selectPrompt(saved.id)
+      selectPrompt(saved.id, { skipDiscardCheck: true })
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : '保存に失敗しました'
     } finally {
       saving = false
     }
@@ -85,12 +131,17 @@
     if (!confirm('このプロンプトを削除しますか？')) {
       return
     }
-    await deleteSavedPrompt(selectedId)
-    prompts = prompts.filter((p) => p.id !== selectedId)
-    if (prompts.length > 0) {
-      selectPrompt(prompts[0].id)
-    } else {
-      startNewPrompt()
+    errorMessage = ''
+    try {
+      await deleteSavedPrompt(selectedId)
+      prompts = prompts.filter((p) => p.id !== selectedId)
+      if (prompts.length > 0) {
+        selectPrompt(prompts[0].id, { skipDiscardCheck: true })
+      } else {
+        startNewPrompt({ skipDiscardCheck: true })
+      }
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : '削除に失敗しました'
     }
   }
 
@@ -121,6 +172,9 @@
       {#if loading}
         <p class="muted">読み込み中…</p>
       {:else}
+        {#if errorMessage}
+          <p class="prompt-error">{errorMessage}</p>
+        {/if}
         <div class="prompt-list">
           {#each prompts as item (item.id)}
             <button
@@ -132,7 +186,7 @@
               {item.title}
             </button>
           {/each}
-          <button class="small-button" type="button" onclick={startNewPrompt}>＋ 新規</button>
+          <button class="small-button" type="button" onclick={() => startNewPrompt()}>＋ 新規</button>
         </div>
 
         <label class="prompt-field">
@@ -182,6 +236,11 @@
     border: 1px solid rgba(148, 163, 184, 0.25);
     border-radius: 8px;
     background: rgba(15, 23, 42, 0.35);
+  }
+  .prompt-error {
+    color: #f87171;
+    font-size: 0.875rem;
+    margin: 0;
   }
   .prompt-list {
     display: flex;

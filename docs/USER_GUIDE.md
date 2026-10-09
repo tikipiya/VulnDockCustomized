@@ -11,7 +11,8 @@
 3. Attach **PoC files** (stored as BLOBs in SQLite, max 50MB each).
 4. **Save** — data lives under `VULNDOCK_DATA_DIR` (default `~/.local/share/vulndock-customized`).
 5. **Delete** moves a report to the **trash** (sidebar). Restore from trash within **5 days**, after which reports are purged automatically.
-6. **Encrypted ZIP** export/restore uses the same format as the desktop app (`/api/backup/*` or UI buttons). Saved prompts are included in the payload (`prompts` field); older desktop-only backups restore with an empty prompt list.
+6. **Saved prompts** (sidebar): store titles and bodies, copy to clipboard, edit in place. Data is stored in SQLite (`saved_prompts`).
+7. **Encrypted ZIP** export/restore uses the same format as the desktop app (`/api/backup/*` or UI buttons). Saved prompts are included in the payload (`prompts` field); older desktop-only backups restore with an empty prompt list.
 
 Authenticated **server info** (data directory path, DB size) is available at `GET /api/server/info`. Public health is `GET /api/health` (`ok`, `version` only).
 

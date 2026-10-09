@@ -134,6 +134,7 @@
   let pocInput = $state<HTMLInputElement>()
   let backupInput = $state<HTMLInputElement>()
   let backupDialog = $state<BackupDialog | null>(null)
+  let promptReloadSignal = $state(0)
   let trashOpen = $state(false)
   let trashReports = $state<Report[]>([])
   let trashLoading = $state(false)
@@ -391,6 +392,7 @@
       } else {
         const archiveData = await readFileAsDataURL(dialog.file as File)
         reports = (await restoreEncryptedBackup(archiveData, passwordResult.password)).map(normalizeReport)
+        promptReloadSignal += 1
         if (reports.length > 0) {
           selectReport(reports[0], { force: true, skipUnsavedCheck: true })
         } else {
@@ -1210,7 +1212,7 @@
     </div>
 
     <div class="filter-panel">
-      <PromptShelf />
+      <PromptShelf reloadSignal={promptReloadSignal} />
       <button class="ghost-button trash-toggle" type="button" onclick={() => void toggleTrashPanel()}>
         {trashOpen ? 'ゴミ箱を閉じる' : 'ゴミ箱'}
       </button>
