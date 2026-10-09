@@ -55,9 +55,9 @@ VulnDockCustomized is a **single-user, self-hosted** web application. You are re
 
 ### Network and authentication
 
-- Default bind is `0.0.0.0:8080`. Restrict with firewall, Tailscale, or bind to `127.0.0.1` when appropriate.
-- **Initial setup** requires `VULNDOCK_SETUP_TOKEN` (or the token printed at startup) unless `VULNDOCK_TRUST_LOOPBACK_SETUP=true` and the server sees a loopback client. Do **not** expose an uninitialized instance to the internet.
-- Behind nginx/Caddy, do not rely on loopback trust; always set a strong setup token and use HTTPS with `VULNDOCK_SECURE_COOKIES=true`.
+- Default bind is `127.0.0.1:8080` (Docker images use `0.0.0.0:8080`). Restrict with firewall, Tailscale, or a reverse proxy when exposing the service.
+- **Initial setup** requires `VULNDOCK_SETUP_TOKEN`, or the token written to `.setup-token` (mode `0600`) in the data directory when the env var is unset. Loopback trust (`VULNDOCK_TRUST_LOOPBACK_SETUP=true`) applies only to **direct** local clients (no `X-Forwarded-For` / `Forwarded` headers). Do **not** expose an uninitialized instance to the internet.
+- Behind nginx/Caddy, always set a strong setup token and use HTTPS with `VULNDOCK_SECURE_COOKIES=true`.
 - Session cookies are HttpOnly, SameSite=Lax; mutating API calls require CSRF. There is no multi-tenant isolation—anyone who can authenticate is the sole administrator.
 
 ### Backups
