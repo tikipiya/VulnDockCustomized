@@ -1183,7 +1183,7 @@ func TestNormalizeBackupPayloadRejectsUnsafeOrMissingAttachments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := bkp.NormalizePayload(tt.payload); err == nil {
+			if _, err := bkp.NormalizePayload(tt.payload); err == nil {
 				t.Fatal("bkp.NormalizePayload accepted invalid backup payload")
 			}
 		})

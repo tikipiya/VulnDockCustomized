@@ -23,6 +23,7 @@ const version = "1.1.0"
 type Server struct {
 	Auth               *auth.Service
 	Reports            *service.Reports
+	Prompts            *service.Prompts
 	Backup             *service.Backup
 	Static             http.Handler
 	DataDir            string
@@ -70,10 +71,11 @@ func (l *loginLimiter) allow(ip string) bool {
 	return lim.Allow()
 }
 
-func New(authSvc *auth.Service, reports *service.Reports, backupSvc *service.Backup, static http.Handler, dataDir string, setupToken string, trustLoopbackSetup bool, secureCookies bool) *Server {
+func New(authSvc *auth.Service, reports *service.Reports, prompts *service.Prompts, backupSvc *service.Backup, static http.Handler, dataDir string, setupToken string, trustLoopbackSetup bool, secureCookies bool) *Server {
 	return &Server{
 		Auth:               authSvc,
 		Reports:            reports,
+		Prompts:            prompts,
 		Backup:             backupSvc,
 		Static:             static,
 		DataDir:            dataDir,
@@ -98,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/reports/", s.withAuth(s.handleReportSubroutes))
 	mux.HandleFunc("/api/server/info", s.withAuth(s.handleServerInfo))
 	s.registerBackupRoutes(mux)
+	s.registerPromptRoutes(mux)
 	mux.Handle("/", s.spaFallback())
 	return withSecurityHeaders(mux)
 }

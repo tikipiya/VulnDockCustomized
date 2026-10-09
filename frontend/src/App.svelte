@@ -14,6 +14,7 @@
   import { selectedBackupFile, validateBackupPasswordPair, validateRestorePassword } from './backup'
   import { calculateCvss, inferCvssVersion } from './cvss'
   import logoUrl from './assets/images/logo.png'
+  import PromptShelf from './PromptShelf.svelte'
   import SveltyPicker from 'svelty-picker'
   import { jp } from 'svelty-picker/i18n'
 
@@ -1209,6 +1210,7 @@
     </div>
 
     <div class="filter-panel">
+      <PromptShelf />
       <button class="ghost-button trash-toggle" type="button" onclick={() => void toggleTrashPanel()}>
         {trashOpen ? 'ゴミ箱を閉じる' : 'ゴミ箱'}
       </button>

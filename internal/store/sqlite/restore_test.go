@@ -44,7 +44,7 @@ func TestRestoreFromBackupRollsBackOnFailure(t *testing.T) {
 		"f1": oversized,
 	}
 
-	if err := store.RestoreFromBackup(ctx, bad, attachments); err == nil {
+	if err := store.RestoreFromBackup(ctx, bad, attachments, nil); err == nil {
 		t.Fatal("expected restore to fail on oversized attachment")
 	}
 

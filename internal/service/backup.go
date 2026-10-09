@@ -28,7 +28,11 @@ func (s *Backup) Export(ctx context.Context, password string) (backup.Result, er
 			}
 		}
 	}
-	return backup.ExportZip(reports, func(file domain.PocFile) ([]byte, error) {
+	prompts, err := s.Store.ListSavedPrompts(ctx)
+	if err != nil {
+		return backup.Result{}, err
+	}
+	return backup.ExportZip(reports, prompts, func(file domain.PocFile) ([]byte, error) {
 		reportID := reportByFileID[file.ID]
 		if reportID == "" {
 			return nil, domainError("attachment report not found")
@@ -42,10 +46,12 @@ func (s *Backup) Restore(ctx context.Context, archive []byte, password string) (
 	s.restoreMu.Lock()
 	defer s.restoreMu.Unlock()
 
-	reports, attachments, err := backup.ImportZip(archive, password)
+	imported, err := backup.ImportZip(archive, password)
 	if err != nil {
 		return nil, err
 	}
+	reports := imported.Reports
+	attachments := imported.Attachments
 	for _, report := range reports {
 		if err := domain.ValidatePocFileMetadata(report.PocFiles); err != nil {
 			return nil, err
@@ -54,7 +60,10 @@ func (s *Backup) Restore(ctx context.Context, archive []byte, password string) (
 	if err := validateRestoreAttachments(reports, attachments); err != nil {
 		return nil, err
 	}
-	if err := s.Store.RestoreFromBackup(ctx, reports, attachments); err != nil {
+	if err := validateRestorePrompts(imported.Prompts); err != nil {
+		return nil, err
+	}
+	if err := s.Store.RestoreFromBackup(ctx, reports, attachments, imported.Prompts); err != nil {
 		return nil, err
 	}
 	return s.Store.ListReports(ctx, false)
@@ -73,6 +82,15 @@ func validateRestoreAttachments(reports []domain.Report, attachments map[string]
 			if len(content) > domain.MaxPocFileBytes {
 				return fmt.Errorf("attachment %q exceeds %d byte limit", file.Name, domain.MaxPocFileBytes)
 			}
+		}
+	}
+	return nil
+}
+
+func validateRestorePrompts(prompts []domain.SavedPrompt) error {
+	for _, prompt := range prompts {
+		if len(prompt.Body) > domain.MaxSavedPromptBytes {
+			return fmt.Errorf("prompt %q exceeds %d byte limit", prompt.Title, domain.MaxSavedPromptBytes)
 		}
 	}
 	return nil

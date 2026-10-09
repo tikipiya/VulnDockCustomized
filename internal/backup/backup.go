@@ -66,9 +66,16 @@ type Attachment struct {
 }
 
 type Payload struct {
-	Format      string          `json:"format"`
-	Reports     []domain.Report `json:"reports"`
-	Attachments []Attachment    `json:"attachments"`
+	Format      string               `json:"format"`
+	Reports     []domain.Report      `json:"reports"`
+	Attachments []Attachment         `json:"attachments"`
+	Prompts     []domain.SavedPrompt `json:"prompts,omitempty"`
+}
+
+type ImportResult struct {
+	Reports     []domain.Report
+	Attachments map[string][]byte
+	Prompts     []domain.SavedPrompt
 }
 
 type Result struct {
@@ -98,11 +105,11 @@ func DecodeArchiveData(data string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(data)
 }
 
-func ExportZip(reports []domain.Report, readAttachment func(domain.PocFile) ([]byte, error), password string) (Result, error) {
+func ExportZip(reports []domain.Report, prompts []domain.SavedPrompt, readAttachment func(domain.PocFile) ([]byte, error), password string) (Result, error) {
 	if err := ValidatePassword(password); err != nil {
 		return Result{}, err
 	}
-	payload, err := BuildPayload(reports, readAttachment)
+	payload, err := BuildPayload(reports, prompts, readAttachment)
 	if err != nil {
 		return Result{}, err
 	}
@@ -128,36 +135,40 @@ func ExportZip(reports []domain.Report, readAttachment func(domain.PocFile) ([]b
 	}, nil
 }
 
-func ImportZip(archive []byte, password string) ([]domain.Report, map[string][]byte, error) {
+func ImportZip(archive []byte, password string) (ImportResult, error) {
 	if err := ValidatePassword(password); err != nil {
-		return nil, nil, err
+		return ImportResult{}, err
 	}
 	if len(archive) > MaxEncryptedBytes {
-		return nil, nil, errors.New("backup archive is too large")
+		return ImportResult{}, errors.New("backup archive is too large")
 	}
 	manifest, ciphertext, err := ReadZip(archive)
 	if err != nil {
-		return nil, nil, err
+		return ImportResult{}, err
 	}
 	payloadJSON, err := DecryptPayload(manifest, ciphertext, password)
 	if err != nil {
-		return nil, nil, err
+		return ImportResult{}, err
 	}
 	var payload Payload
 	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
-		return nil, nil, err
+		return ImportResult{}, err
 	}
 	if payload.Format != Format {
-		return nil, nil, errors.New("unsupported encrypted backup payload")
+		return ImportResult{}, errors.New("unsupported encrypted backup payload")
 	}
 	return NormalizePayload(payload)
 }
 
-func BuildPayload(reports []domain.Report, readAttachment func(domain.PocFile) ([]byte, error)) (Payload, error) {
+func BuildPayload(reports []domain.Report, prompts []domain.SavedPrompt, readAttachment func(domain.PocFile) ([]byte, error)) (Payload, error) {
 	domain.EnsureReportsList(reports)
+	if prompts == nil {
+		prompts = []domain.SavedPrompt{}
+	}
 	payload := Payload{
 		Format:  Format,
 		Reports: reports,
+		Prompts: prompts,
 	}
 	seen := map[string]bool{}
 	for _, report := range reports {
@@ -183,9 +194,12 @@ func BuildPayload(reports []domain.Report, readAttachment func(domain.PocFile) (
 	return payload, nil
 }
 
-func NormalizePayload(payload Payload) ([]domain.Report, map[string][]byte, error) {
+func NormalizePayload(payload Payload) (ImportResult, error) {
 	if err := validateReportAttachmentPaths(payload.Reports); err != nil {
-		return nil, nil, err
+		return ImportResult{}, err
+	}
+	if err := validateBackupPrompts(payload.Prompts); err != nil {
+		return ImportResult{}, err
 	}
 	stored := make([]domain.StoredReport, 0, len(payload.Reports))
 	for _, report := range payload.Reports {
@@ -197,11 +211,11 @@ func NormalizePayload(payload Payload) ([]domain.Report, map[string][]byte, erro
 	for _, attachment := range payload.Attachments {
 		relPath := filepath.ToSlash(strings.TrimSpace(attachment.Path))
 		if err := domain.ValidateLegacyAttachmentPath(relPath); err != nil {
-			return nil, nil, err
+			return ImportResult{}, err
 		}
 		content, err := base64.StdEncoding.DecodeString(attachment.Data)
 		if err != nil {
-			return nil, nil, fmt.Errorf("decode backup attachment %q: %w", relPath, err)
+			return ImportResult{}, fmt.Errorf("decode backup attachment %q: %w", relPath, err)
 		}
 		attachments[relPath] = content
 	}
@@ -212,15 +226,31 @@ func NormalizePayload(payload Payload) ([]domain.Report, map[string][]byte, erro
 				continue
 			}
 			if err := domain.ValidateLegacyAttachmentPath(relPath); err != nil {
-				return nil, nil, err
+				return ImportResult{}, err
 			}
 			if _, ok := attachments[relPath]; !ok {
-				return nil, nil, fmt.Errorf("backup is missing attachment content for %q", relPath)
+				return ImportResult{}, fmt.Errorf("backup is missing attachment content for %q", relPath)
 			}
 		}
 	}
 	domain.EnsureReportsList(reports)
-	return reports, attachments, nil
+	prompts := payload.Prompts
+	if prompts == nil {
+		prompts = []domain.SavedPrompt{}
+	}
+	return ImportResult{Reports: reports, Attachments: attachments, Prompts: prompts}, nil
+}
+
+func validateBackupPrompts(prompts []domain.SavedPrompt) error {
+	for _, prompt := range prompts {
+		if strings.TrimSpace(prompt.ID) == "" {
+			return errors.New("backup prompt id is required")
+		}
+		if len(prompt.Body) > domain.MaxSavedPromptBytes {
+			return fmt.Errorf("backup prompt %q exceeds size limit", prompt.Title)
+		}
+	}
+	return nil
 }
 
 func validateReportAttachmentPaths(reports []domain.Report) error {

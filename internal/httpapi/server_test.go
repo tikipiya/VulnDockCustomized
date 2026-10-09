@@ -24,6 +24,7 @@ func TestSetupRequiresTokenByDefault(t *testing.T) {
 	srv := New(
 		&auth.Service{Store: store},
 		&service.Reports{Store: store},
+		&service.Prompts{Store: store},
 		&service.Backup{Store: store},
 		nil,
 		dir,
@@ -60,7 +61,7 @@ func TestHealthDoesNotExposeDataDir(t *testing.T) {
 	}
 	defer store.Close()
 
-	srv := New(&auth.Service{Store: store}, &service.Reports{Store: store}, nil, nil, filepath.Join(dir, "data"), "tok", false, false)
+	srv := New(&auth.Service{Store: store}, &service.Reports{Store: store}, nil, nil, nil, filepath.Join(dir, "data"), "tok", false, false)
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)

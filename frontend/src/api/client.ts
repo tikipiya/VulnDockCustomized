@@ -77,6 +77,50 @@ export async function changePassword(currentPassword: string, newPassword: strin
   csrfToken = body.csrfToken
 }
 
+export type SavedPrompt = {
+  id: string
+  title: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+export async function listSavedPrompts(): Promise<SavedPrompt[]> {
+  const data = await parseJSON<unknown>(await fetch('/api/prompts', { credentials: 'include' }))
+  return Array.isArray(data) ? (data as SavedPrompt[]) : []
+}
+
+export async function saveSavedPrompt(draft: {
+  id?: string
+  title: string
+  body: string
+}): Promise<SavedPrompt> {
+  const isNew = !draft.id
+  const url = isNew ? '/api/prompts' : `/api/prompts/${encodeURIComponent(draft.id!)}`
+  const method = isNew ? 'POST' : 'PUT'
+  return parseJSON(
+    await fetch(url, {
+      method,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: JSON.stringify(draft),
+    }),
+  )
+}
+
+export async function deleteSavedPrompt(id: string): Promise<void> {
+  await parseJSON(
+    await fetch(`/api/prompts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'X-CSRF-Token': csrfToken },
+    }),
+  )
+}
+
 export async function listReports(): Promise<unknown[]> {
   const data = await parseJSON<unknown>(await fetch('/api/reports', { credentials: 'include' }))
   return Array.isArray(data) ? data : []

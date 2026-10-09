@@ -57,5 +57,14 @@ CREATE TABLE IF NOT EXISTS poc_files (
   legacy_path TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS saved_prompts (
+  id TEXT PRIMARY KEY NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_reports_deleted ON reports(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_reports_updated ON reports(updated_at);
+CREATE INDEX IF NOT EXISTS idx_saved_prompts_updated ON saved_prompts(updated_at);

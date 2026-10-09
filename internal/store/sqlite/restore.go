@@ -7,7 +7,7 @@ import (
 	"VulnDock/internal/domain"
 )
 
-func (s *Store) RestoreFromBackup(ctx context.Context, reports []domain.Report, attachments map[string][]byte) error {
+func (s *Store) RestoreFromBackup(ctx context.Context, reports []domain.Report, attachments map[string][]byte, prompts []domain.SavedPrompt) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -46,5 +46,18 @@ func (s *Store) RestoreFromBackup(ctx context.Context, reports []domain.Report, 
 			}
 		}
 	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM saved_prompts`); err != nil {
+		return err
+	}
+	for _, prompt := range prompts {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO saved_prompts(id, title, body, created_at, updated_at)
+			VALUES (?,?,?,?,?)
+		`, prompt.ID, prompt.Title, prompt.Body, prompt.CreatedAt, prompt.UpdatedAt); err != nil {
+			return err
+		}
+	}
+
 	return tx.Commit()
 }

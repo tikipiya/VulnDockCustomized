@@ -70,6 +70,7 @@ func runServer() {
 	defer store.Close()
 
 	reports := &service.Reports{Store: store}
+	prompts := &service.Prompts{Store: store}
 	backupSvc := &service.Backup{Store: store}
 	authSvc := &auth.Service{Store: store}
 	setupToken := strings.TrimSpace(os.Getenv("VULNDOCK_SETUP_TOKEN"))
@@ -83,7 +84,7 @@ func runServer() {
 	}
 
 	srv := httpapi.New(
-		authSvc, reports, backupSvc, staticHandler, dataDir, setupToken,
+		authSvc, reports, prompts, backupSvc, staticHandler, dataDir, setupToken,
 		envBool("VULNDOCK_TRUST_LOOPBACK_SETUP", false),
 		envBool("VULNDOCK_SECURE_COOKIES", false),
 	)

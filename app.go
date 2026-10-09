@@ -268,7 +268,7 @@ func (a *App) CreateEncryptedBackup(password string) (EncryptedBackup, error) {
 	if err != nil {
 		return EncryptedBackup{}, err
 	}
-	result, err := backup.ExportZip(reportsToDomain(reports), func(file domain.PocFile) ([]byte, error) {
+	result, err := backup.ExportZip(reportsToDomain(reports), nil, func(file domain.PocFile) ([]byte, error) {
 		poc := fromDomainPocFile(file)
 		path, err := a.attachmentAbsolutePath(poc)
 		if err != nil {
@@ -290,11 +290,11 @@ func (a *App) RestoreEncryptedBackup(archiveData string, password string) ([]Rep
 	if err != nil {
 		return nil, err
 	}
-	reports, attachments, err := backup.ImportZip(archive, password)
+	imported, err := backup.ImportZip(archive, password)
 	if err != nil {
 		return nil, err
 	}
-	if err := a.restoreBackupPayload(reportsFromDomain(reports), attachments); err != nil {
+	if err := a.restoreBackupPayload(reportsFromDomain(imported.Reports), imported.Attachments); err != nil {
 		return nil, err
 	}
 	return a.loadReports()
