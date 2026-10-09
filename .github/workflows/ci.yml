@@ -43,6 +43,8 @@ jobs:
         run: |
           npm ci --prefix frontend
           npm run build --prefix frontend
+          rm -rf internal/static/dist
+          cp -a frontend/dist internal/static/dist
 
       - name: Run Go tests
         run: go test ./...
