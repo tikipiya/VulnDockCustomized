@@ -35,11 +35,11 @@ Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VULNDOCK_BIND` | `0.0.0.0:8080` | Listen address |
+| `VULNDOCK_BIND` | `127.0.0.1:8080` | Listen address (Docker image uses `0.0.0.0:8080`) |
 | `VULNDOCK_DATA_DIR` | `~/.local/share/vulndock-customized` | SQLite DB directory |
 | `VULNDOCK_STATIC_DIR` | `frontend/dist` (if present) | Built SPA files |
-| `VULNDOCK_SETUP_TOKEN` | auto-generated if unset | First-time setup wizard |
-| `VULNDOCK_TRUST_LOOPBACK_SETUP` | `false` | Dev-only: allow setup without token from loopback clients |
+| `VULNDOCK_SETUP_TOKEN` | auto-generated → `.setup-token` in data dir | First-time setup wizard |
+| `VULNDOCK_TRUST_LOOPBACK_SETUP` | `false` | Dev-only: direct loopback without proxy headers |
 | `VULNDOCK_SECURE_COOKIES` | `false` | Set `true` behind HTTPS reverse proxy |
 
 ## Migrate from desktop VulnDock
