@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import type { Snippet } from 'svelte'
   import {
     changePassword,
@@ -25,7 +26,7 @@
   let currentPassword = $state('')
   let newPassword = $state('')
 
-  $effect(() => {
+  onMount(() => {
     void refreshStatus()
   })
 

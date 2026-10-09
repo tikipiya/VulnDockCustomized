@@ -33,7 +33,7 @@ func Open(dataDir string) (*Store, error) {
 		return nil, err
 	}
 	dbPath := filepath.Join(dataDir, "vulndock-customized.db")
-	db, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
@@ -112,20 +112,28 @@ func (s *Store) ListReports(ctx context.Context, includeDeleted bool) ([]domain.
 		if err := json.Unmarshal([]byte(tagsJSON), &r.Tags); err != nil {
 			return nil, err
 		}
-		logs, err := s.listConversationLogs(ctx, r.ID)
-		if err != nil {
-			return nil, err
-		}
-		r.ConversationLogs = logs
-		pocs, err := s.listPocFiles(ctx, r.ID)
-		if err != nil {
-			return nil, err
-		}
-		r.PocFiles = pocs
-		domain.EnsureReportSlices(&r)
 		reports = append(reports, r)
 	}
-	return domain.EnsureReportsList(reports), rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range reports {
+		logs, err := s.listConversationLogs(ctx, reports[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		reports[i].ConversationLogs = logs
+		pocs, err := s.listPocFiles(ctx, reports[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		reports[i].PocFiles = pocs
+		domain.EnsureReportSlices(&reports[i])
+	}
+	return domain.EnsureReportsList(reports), nil
 }
 
 func (s *Store) listConversationLogs(ctx context.Context, reportID string) ([]domain.ConversationEntry, error) {
