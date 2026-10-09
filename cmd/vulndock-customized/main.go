@@ -58,7 +58,7 @@ func runMigrate(args []string) {
 }
 
 func runServer() {
-	bind := envOr("VULNDOCK_BIND", "0.0.0.0:8080")
+	bind := envOr("VULNDOCK_BIND", "127.0.0.1:8080")
 	dataDir := envOr("VULNDOCK_DATA_DIR", defaultDataDir())
 	staticDir := strings.TrimSpace(os.Getenv("VULNDOCK_STATIC_DIR"))
 	staticHandler, staticSource := resolveStaticHandler(staticDir)
@@ -80,7 +80,12 @@ func runServer() {
 			log.Fatal(err)
 		}
 		setupToken = generated
-		log.Printf("VULNDOCK_SETUP_TOKEN is unset; remote initial setup requires header/body token: %s", setupToken)
+		tokenPath := filepath.Join(dataDir, ".setup-token")
+		if err := os.WriteFile(tokenPath, []byte(setupToken+"\n"), 0o600); err != nil {
+			log.Printf("VULNDOCK_SETUP_TOKEN is unset and could not write %s: %v", tokenPath, err)
+		} else {
+			log.Printf("VULNDOCK_SETUP_TOKEN is unset; set the env var or read the token from %s (mode 0600) for remote setup", tokenPath)
+		}
 	}
 
 	srv := httpapi.New(
