@@ -89,14 +89,14 @@ Produces:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VULNDOCK_BIND` | `0.0.0.0:8080` | Listen address |
+| `VULNDOCK_BIND` | `127.0.0.1:8080` | Listen address |
 | `VULNDOCK_DATA_DIR` | `~/.local/share/vulndock-customized` | Data directory (SQLite) |
 | `VULNDOCK_STATIC_DIR` | `frontend/dist` if present | Path to built SPA |
-| `VULNDOCK_SETUP_TOKEN` | (auto-generated, logged once) | First-time setup (required unless loopback trust is enabled) |
-| `VULNDOCK_TRUST_LOOPBACK_SETUP` | `false` | If `true`, skip setup token when the server sees a loopback client (dev only; unsafe behind reverse proxies) |
+| `VULNDOCK_SETUP_TOKEN` | (auto-generated, written to `.setup-token` in data dir) | First-time setup (required unless direct loopback trust is enabled) |
+| `VULNDOCK_TRUST_LOOPBACK_SETUP` | `false` | If `true`, skip setup token for **direct** loopback clients without proxy headers (dev only) |
 | `VULNDOCK_SECURE_COOKIES` | `false` | Set `true` when the app is served only over HTTPS (session cookie `Secure` flag) |
 
-First-time setup always requires the setup token unless you set `VULNDOCK_TRUST_LOOPBACK_SETUP=true` **and** connect directly to loopback (not through nginx/Caddy on `127.0.0.1:8080`).
+First-time setup always requires the setup token unless you set `VULNDOCK_TRUST_LOOPBACK_SETUP=true` **and** connect directly to loopback (no `X-Forwarded-For` / `Forwarded` headers—reverse proxies always need the token).
 
 ## Migrate from desktop VulnDock
 

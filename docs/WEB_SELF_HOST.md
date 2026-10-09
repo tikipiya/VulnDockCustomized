@@ -10,7 +10,7 @@ Tagged releases publish `ghcr.io/<owner>/vulndock-customized` (linux/amd64). Exa
 docker run --rm -p 8080:8080 -v vulndock-data:/data ghcr.io/<owner>/vulndock-customized:latest
 ```
 
-Complete the setup wizard at `http://localhost:8080` on first run. Enter `VULNDOCK_SETUP_TOKEN` (or the token from container logs) in the setup form—required by default even when you browse via `localhost` on the host.
+Complete the setup wizard at `http://localhost:8080` on first run. Set `VULNDOCK_SETUP_TOKEN` or read `.setup-token` inside the data volume (`docker exec` / `cat /data/.setup-token`). Required by default even when browsing via `localhost` on the host (loopback trust does not apply through published ports with proxy headers).
 
 ## Build
 

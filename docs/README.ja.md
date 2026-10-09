@@ -44,7 +44,7 @@ make build
 
 ## 運用
 
-Tailscale や LAN 内での利用を想定しています。初回セットアップは通常 `VULNDOCK_SETUP_TOKEN`（未設定時は起動ログ）が必要です。同一マシン直アクセスの開発のみ `VULNDOCK_TRUST_LOOPBACK_SETUP=true` でトークン省略可。HTTPS 運用時は `VULNDOCK_SECURE_COOKIES=true` を推奨。詳細は [WEB_SELF_HOST.md](WEB_SELF_HOST.md) と `deploy/vulndock-customized.service` を参照してください。
+Tailscale や LAN 内での利用を想定しています。初回セットアップは通常 `VULNDOCK_SETUP_TOKEN`（未設定時はデータディレクトリの `.setup-token`）が必要です。プロキシ経由ではループバック信頼は無効です。同一マシンへ直接 `127.0.0.1` で繋ぐ開発のみ `VULNDOCK_TRUST_LOOPBACK_SETUP=true` でトークン省略可。HTTPS 運用時は `VULNDOCK_SECURE_COOKIES=true` を推奨。詳細は [WEB_SELF_HOST.md](WEB_SELF_HOST.md) と `deploy/vulndock-customized.service` を参照してください。
 
 ## 英語 README
 

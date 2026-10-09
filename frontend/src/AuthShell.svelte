@@ -94,7 +94,7 @@
     <h1>VulnDockCustomized 初期設定</h1>
     <p>管理者パスワードを設定してください（8文字以上）。</p>
     {#if setupTokenRequired}
-      <p>初回セットアップにはサーバーログのセットアップトークン（または <code>VULNDOCK_SETUP_TOKEN</code>）が必要です。同一マシンで <code>127.0.0.1</code> のみ使う開発時は <code>VULNDOCK_TRUST_LOOPBACK_SETUP=true</code> で省略できます。</p>
+      <p>初回セットアップには <code>VULNDOCK_SETUP_TOKEN</code>（未設定時はデータディレクトリの <code>.setup-token</code>）が必要です。プロキシ経由ではループバック信頼は使えません。同一マシンへ直接 <code>127.0.0.1</code> で繋ぐ開発時のみ <code>VULNDOCK_TRUST_LOOPBACK_SETUP=true</code> で省略できます。</p>
     {/if}
     {#if errorMessage}<p class="auth-error">{errorMessage}</p>{/if}
     <form
