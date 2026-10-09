@@ -1,0 +1,15 @@
+---
+description: Commit completed work without waiting for an explicit request
+alwaysApply: true
+---
+
+# Git commits
+
+When you finish a coherent unit of work (bug fix, feature, refactor, docs), **create a git commit** without the user having to ask.
+
+- Follow the repository commit message style; focus on why, not a file list.
+- Do **not** commit secrets (`.env`, credentials) or unrelated WIP.
+- Do **not** `git push` unless the user asks.
+- If there is nothing to commit, skip silently.
+
+This preference overrides generic “only commit when explicitly requested” guidance for this project.
